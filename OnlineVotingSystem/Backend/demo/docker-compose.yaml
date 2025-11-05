@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: keycloak-db
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: password
+
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./OVS_System-realm.json:/opt/keycloak/data/import/OVS_System-realm.json
+    networks:
+      - keycloak-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.1
+    container_name: keycloak-server
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: password
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DEFAULT_REALM: OVS-System
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+    networks:
+      - keycloak-network
+
+volumes:
+  keycloak_db_data:
+
+networks:
+  keycloak-network:
+
