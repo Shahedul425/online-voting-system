@@ -3,6 +3,7 @@ import com.example.demo.Models.ElectionModel;
 import com.example.demo.ServiceInterface.ElectionAdminServiceInterface;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -30,5 +31,10 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
     @Override
     public void publishElectionResult(UUID electionId) {
 
+    }
+
+    @Override
+    public List<ElectionModel> getActiveElections() {
+        return List.of();
     }
 }

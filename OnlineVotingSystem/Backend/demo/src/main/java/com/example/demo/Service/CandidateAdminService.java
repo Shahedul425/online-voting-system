@@ -1,4 +1,5 @@
 package com.example.demo.Service;
+import com.example.demo.Models.CandidateListModel;
 import com.example.demo.ServiceInterface.CandidateAdminServiceInterface;
 import org.springframework.stereotype.Service;
 
@@ -8,12 +9,12 @@ import java.util.UUID;
 @Service
 public class CandidateAdminService implements CandidateAdminServiceInterface {
     @Override
-    public CandidateModel createCandidate() {
+    public CandidateListModel createCandidate() {
         return null;
     }
 
     @Override
-    public CandidateModel updateCandidate() {
+    public CandidateListModel updateCandidate() {
         return null;
     }
 
@@ -23,7 +24,7 @@ public class CandidateAdminService implements CandidateAdminServiceInterface {
     }
 
     @Override
-    public List<CandidateModel> getAllCandidates(UUID electionId) {
+    public List<CandidateListModel> getAllCandidates(UUID electionId) {
         return List.of();
     }
 }
