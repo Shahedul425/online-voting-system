@@ -39,7 +39,8 @@ public class RegisterService {
 
         return response.get("access_token").toString();
     }
-
+//Will Register User in Applicaiton DB after they register in Keycloak and will use Keycloak Token to check whether user already
+//    exist or not?if not then create user. login will be as usual
     public void register(String username,String email, String firstName, String lastName, String password) {
 
         String adminToken = getAdminToken();

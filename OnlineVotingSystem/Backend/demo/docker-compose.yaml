@@ -14,6 +14,21 @@ services:
     networks:
       - keycloak-network
 
+  app_db:
+    image: postgres:15
+    container_name: app-db
+    environment:
+      POSTGRES_DB: ovsApp
+      POSTGRES_USER: ovsApp
+      POSTGRES_PASSWORD: ovsPass
+    ports:
+      - "5433:5432"
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+
+    networks:
+      - keycloak-network
+
   keycloak:
     image: quay.io/keycloak/keycloak:24.0.1
     container_name: keycloak-server
