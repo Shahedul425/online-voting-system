@@ -8,4 +8,6 @@ import java.util.UUID;
 
 @Repository
 public interface VoterListModelRepository extends JpaRepository<VoterListModel, UUID> {
+    boolean existsByElectionIdAndVoterId(UUID electionId, String voterId);
+    boolean existsByElectionIdAndEmail(UUID electionId, String email);
 }

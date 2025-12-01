@@ -15,7 +15,12 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(
-        uniqueConstraints = @UniqueConstraint(columnNames = {"electionId", "voterId"})
+        uniqueConstraints = {
+                @UniqueConstraint(columnNames = {"electionId", "voterId"}),
+                @UniqueConstraint(columnNames = {"electionId", "email"}),
+        }
+
+
 )
 
 public class VoterListModel {

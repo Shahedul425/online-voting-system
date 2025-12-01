@@ -5,10 +5,12 @@ import lombok.Setter;
 import org.springframework.stereotype.Component;
 @Getter
 @Setter
-public class CandidateRequest {
+public class CandidateCsvRequest {
     private String firstName;
     private String lastName;
     private String photoUrl;
     private String position;
     private String ballotSerial;
+    private Integer lineNumber;
+    private String party;
 }
