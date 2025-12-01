@@ -8,7 +8,7 @@
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
         <processorPath>
-          <entry name="$PROJECT_DIR$/OnlineVotingSystem/Backend/demo/src/main/java/com/example/demo/Models/UserModel.java" />
+          <entry name="$MAVEN_REPOSITORY$/org/projectlombok/lombok/unknown/lombok-unknown.jar" />
         </processorPath>
         <module name="demo" />
       </profile>

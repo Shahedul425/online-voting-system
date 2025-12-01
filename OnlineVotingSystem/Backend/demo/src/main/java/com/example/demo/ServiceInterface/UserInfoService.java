@@ -3,6 +3,7 @@ package com.example.demo.ServiceInterface;
 import com.example.demo.Models.UserModel;
 
 public interface UserInfoService {
-    String findOrCreateUser(String token);
+    String findOrCreateUser();
     UserModel getByKeyCloakId(String keyCloakId);
+    UserModel getCurrentUser();
 }

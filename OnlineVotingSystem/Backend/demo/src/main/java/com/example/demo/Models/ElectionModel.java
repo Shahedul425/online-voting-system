@@ -1,5 +1,6 @@
 package com.example.demo.Models;
 
+import com.example.demo.Enums.ElectionStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
@@ -22,17 +23,21 @@ public class ElectionModel {
     private String name;
     private String description;
     private String electionType;
-    private String status;
+    @Enumerated(EnumType.STRING)
+    private ElectionStatus status;
 //    @Column(unique = true)
 //    private String code;
     private String merkleRoot;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
     private LocalDateTime publishedAt;
+    private boolean isVoterListUploaded;
+    private boolean isCandidateListUploaded;
     @ManyToOne
     @JoinColumn(name = "creatorId")
     private UserModel createdBy;
     @ManyToOne
     @JoinColumn(name = "organizationId")
     private OrganizationModel organization;
+    private LocalDateTime createdAt;
 }

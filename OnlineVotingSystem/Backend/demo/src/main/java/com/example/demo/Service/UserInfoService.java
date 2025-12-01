@@ -3,51 +3,67 @@ import com.auth0.jwt.interfaces.DecodedJWT;
 import com.example.demo.Enums.Role;
 import com.example.demo.Models.UserModel;
 import com.example.demo.Repositories.UserModelRepository;
+import com.example.demo.security.SecurityUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
-
+@RequiredArgsConstructor
 public class UserInfoService implements com.example.demo.ServiceInterface.UserInfoService {
+
     private final UserModelRepository userModelRepository;
-    private final JwtService jwtService;
-    public UserInfoService(UserModelRepository userModelRepository, JwtService jwtService) {
-        this.userModelRepository = userModelRepository;
-        this.jwtService = jwtService;
-    }
+    private final SecurityUtils securityUtils;
 
     @Override
-    public String findOrCreateUser(String token) {
-        DecodedJWT decodedJWT = jwtService.decodeJwt(token);
-        String keyCloakId = jwtService.extractKeyCloakId(token);
-        String email = jwtService.extractEmail(token);
-        List<String> roles = jwtService.extractRoles(token);
-        UserModel exist = userModelRepository.findByKeycloakId(keyCloakId);
-        Role systemRole = mapToRole(roles);
-        if (exist != null) {
-            return "User Already Exists!!";
+    public String findOrCreateUser() {
+        String keycloakId = securityUtils.getKeycloakId();
+        String email = securityUtils.getEmail();
+        List<String> roles = securityUtils.getRealmRoles();
+
+        if (keycloakId == null || email == null) {
+            throw new RuntimeException("Missing or invalid JWT — user not authenticated.");
         }
-        UserModel userModel = new UserModel();
-        userModel.setEmail(email);
-        userModel.setKeycloakId(keyCloakId);
-        userModel.setRole(systemRole);
-        userModelRepository.save(userModel);
-        return "User created!";
 
+        Role systemRole = mapToRole(roles);
 
+        boolean exists = userModelRepository.findByKeycloakId(keycloakId).isPresent();
+
+        if (exists) {
+            return "User already exists!";
+        } else {
+            UserModel newUser = new UserModel();
+            newUser.setKeycloakId(keycloakId);
+            newUser.setEmail(email);
+            newUser.setRole(systemRole);
+            userModelRepository.save(newUser);
+            return "User created!";
+        }
     }
+
+
     private Role mapToRole(List<String> roles) {
         for (String r : roles) {
-            try {
-                return Role.valueOf(r.toUpperCase());
-            } catch (IllegalArgumentException ignored) {}
+            if (r.equalsIgnoreCase("admin")) return Role.admin;
+            if (r.equalsIgnoreCase("voter")) return Role.voter;
         }
-        throw new IllegalArgumentException("No valid system role found in token roles");
+        return Role.voter; // default fallback
     }
 
     @Override
     public UserModel getByKeyCloakId(String keyCloakId) {
-        return userModelRepository.findByKeycloakId(keyCloakId);
+        return userModelRepository.findByKeycloakId(keyCloakId).orElse(null);
     }
+
+    @Override
+    public UserModel getCurrentUser() {
+        String kcId = securityUtils.getKeycloakId();
+        return getByKeyCloakId(kcId);
+    }
+
+
 }
