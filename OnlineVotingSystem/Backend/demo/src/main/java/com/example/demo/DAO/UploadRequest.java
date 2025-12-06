@@ -1,8 +1,5 @@
-package com.example.demo.DTO;
+package com.example.demo.DAO;
 
-import com.example.demo.Models.ElectionModel;
-import com.example.demo.Models.UserModel;
-import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.stereotype.Component;

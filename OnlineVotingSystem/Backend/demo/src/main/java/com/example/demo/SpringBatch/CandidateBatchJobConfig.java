@@ -1,6 +1,6 @@
 package com.example.demo.SpringBatch;
 
-import com.example.demo.DTO.CandidateCsvRequest;
+import com.example.demo.DAO.CandidateCsvRequest;
 import com.example.demo.Models.CandidateUploadStaging;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.Job;

@@ -1,9 +1,6 @@
 package com.example.demo.ServiceInterface;
 
-import com.example.demo.DTO.VoterCsvRequest;
-import com.example.demo.Models.VoterListModel;
-
-import java.util.UUID;
+import com.example.demo.DAO.VoterCsvRequest;
 
 public interface VoterImportServiceInterface {
 

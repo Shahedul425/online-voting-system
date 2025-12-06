@@ -1,20 +1,16 @@
 package com.example.demo.Service;
 
-import com.example.demo.DTO.ImportReport;
+import com.example.demo.DAO.ImportReport;
 import com.example.demo.Enums.ElectionStatus;
 import com.example.demo.Models.ElectionModel;
-import com.example.demo.Models.VoterListModel;
 import com.example.demo.Repositories.ElectionModelRepository;
 import com.example.demo.Repositories.VoterListModelRepository;
-import com.example.demo.SpringBatch.VoterBatchJobConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.*;
 import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.repository.JobRestartException;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -68,6 +64,7 @@ public class AdminUploadService {
         importReport.setJobId(jobId.toString());
         importReport.setErrorFilePath(temp.getAbsolutePath());
         return importReport;
+
 
     };
     public ImportReport importCandidateList(

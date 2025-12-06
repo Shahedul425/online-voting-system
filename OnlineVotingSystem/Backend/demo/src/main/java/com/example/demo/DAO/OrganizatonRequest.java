@@ -1,9 +1,5 @@
-package com.example.demo.DTO;
+package com.example.demo.DAO;
 
-import jakarta.persistence.CollectionTable;
-import jakarta.persistence.Column;
-import jakarta.persistence.ElementCollection;
-import jakarta.persistence.JoinColumn;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.stereotype.Component;

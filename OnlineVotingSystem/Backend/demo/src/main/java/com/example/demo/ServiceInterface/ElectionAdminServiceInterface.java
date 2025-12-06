@@ -1,11 +1,10 @@
 package com.example.demo.ServiceInterface;
 
-import com.example.demo.DTO.ElectionRequest;
-import com.example.demo.DTO.ElectionUpdateRequest;
+import com.example.demo.DAO.ElectionRequest;
+import com.example.demo.DAO.ElectionUpdateRequest;
 import com.example.demo.Models.ElectionModel;
 
 import java.util.List;
-import java.util.UUID;
 
 public interface ElectionAdminServiceInterface {
     ElectionModel createElection(ElectionRequest electionRequest);
