@@ -64,7 +64,7 @@ public class CandidateMigrationTasklet implements Tasklet {
             List<CandidateListModel> candidateListModel = chunk.stream().map(s->{
                 CandidateListModel candidateListModel1 = new CandidateListModel();
 
-                candidateListModel1.setElection(electionModel);
+                candidateListModel1.setElectionId(electionModel);
                 candidateListModel1.setFirstName(s.getFirstName());
                 candidateListModel1.setLastName(s.getLastName());
                 candidateListModel1.setBallotSerial(s.getBallotSerial());

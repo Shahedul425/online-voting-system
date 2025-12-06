@@ -8,5 +8,5 @@ import java.util.UUID;
 
 @Repository
 public interface CandidateListRepository extends JpaRepository<CandidateListModel, UUID> {
-    long countByElectionId(UUID electionId);
+    long countByElectionId_Id(UUID electionId);
 }
