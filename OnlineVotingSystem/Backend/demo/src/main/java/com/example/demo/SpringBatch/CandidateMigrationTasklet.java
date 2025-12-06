@@ -44,15 +44,26 @@ public class CandidateMigrationTasklet implements Tasklet {
         if (invalidCount > 0) {
             throw new RuntimeException("Validation failed: " + invalidCount + " invalid rows.");
         }
+        long totalStaging = candidateListStagingRepo.countByJobId(jobId);
+        if (totalStaging == 0) {
+            throw new RuntimeException("CSV contains 0 voter rows");
+        }
+
         int page = 0;
         Page<CandidateUploadStaging> chunk;
+        ElectionModel electionModel = electionModelRepository.findById(electionId).orElse(null);
+        UserModel userModel = userModelRepository.findById(UUID.fromString(importerId)).orElse(null);
+        if (electionModel == null) {
+            throw new RuntimeException("Election not found.");
+        }
+        if (userModel == null) {
+            throw new RuntimeException("User not found.");
+        }
         do{
             chunk = candidateListStagingRepo.findAllByJobId(jobId, PageRequest.of(page,chunkSize));
             List<CandidateListModel> candidateListModel = chunk.stream().map(s->{
                 CandidateListModel candidateListModel1 = new CandidateListModel();
-                //                risk of election being null;
-                ElectionModel electionModel = electionModelRepository.findById(electionId).orElse(null);
-                UserModel userModel = userModelRepository.findById(UUID.fromString(importerId)).orElse(null);
+
                 candidateListModel1.setElection(electionModel);
                 candidateListModel1.setFirstName(s.getFirstName());
                 candidateListModel1.setLastName(s.getLastName());
@@ -64,13 +75,12 @@ public class CandidateMigrationTasklet implements Tasklet {
                 candidateListModel1.setImportedAt(LocalDateTime.now());
                 return candidateListModel1;
             }).toList();
-            if (candidateListModel.isEmpty()){
+            if (!candidateListModel.isEmpty()){
                 candidateListRepository.saveAll(candidateListModel);
             }
             page++;
         }while (chunk.hasNext());
 
-        ElectionModel electionModel = electionModelRepository.findById(electionId).orElse(null);
         electionModel.setCandidateListUploaded(true);
         electionModelRepository.save(electionModel);
         candidateListStagingRepo.deleteAllByJobId(jobId);

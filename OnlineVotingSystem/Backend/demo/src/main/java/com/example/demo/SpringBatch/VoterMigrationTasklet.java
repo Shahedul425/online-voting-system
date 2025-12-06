@@ -36,23 +36,30 @@ public class VoterMigrationTasklet implements Tasklet {
         JobParameters jobParameters = contribution.getStepExecution().getJobParameters();
         UUID jobId = UUID.fromString(jobParameters.getString("jobId"));
         UUID electionId = UUID.fromString(jobParameters.getString("electionId"));
-        String voterId = jobParameters.getString("voterId");
-        String email = jobParameters.getString("email");
+//        String voterId = jobParameters.getString("voterId");
+//        String email = jobParameters.getString("email");
 
         long invalidCount = voterUploadStagingRepo.countInvalidByJobId(jobId);
 
         if (invalidCount > 0) {
             throw new RuntimeException("Validation failed: " + invalidCount + " invalid rows.");
         }
+        long totalStaging = voterUploadStagingRepo.countByJobId(jobId);
+        if (totalStaging == 0) {
+            throw new RuntimeException("CSV contains 0 voter rows");
+        }
+
 
         int page = 0;
         Page<VoterUploadStaging> chunk;
+        ElectionModel election = electionModelRepository.findById(electionId).orElse(null);
+        if (election == null) {
+            throw new RuntimeException("Election not found");
+        }
         do{
             chunk = voterUploadStagingRepo.findAllByJobId(jobId, PageRequest.of(page,chunkSize));
             List<VoterListModel> toSave = chunk.stream().map(s->{
                 VoterListModel voter = new VoterListModel();
-//                risk of election being null;
-                ElectionModel election = electionModelRepository.findById(electionId).orElse(null);
                 voter.setElection(election);
                 voter.setVoterId(s.getVoterId());
                 voter.setEmail(s.getEmail());
@@ -69,10 +76,8 @@ public class VoterMigrationTasklet implements Tasklet {
             page++;
 
         }while (chunk.hasNext());
-        // mark election.voterListUploaded = true
-        ElectionModel elect = electionModelRepository.findById(electionId).orElseThrow(() -> new RuntimeException("Election not found"));
-        elect.setVoterListUploaded(true);
-        electionModelRepository.save(elect);
+        election.setVoterListUploaded(true);
+        electionModelRepository.save(election);
 
         // cleanup staging for this job
         voterUploadStagingRepo.deleteAllByJobId(jobId);

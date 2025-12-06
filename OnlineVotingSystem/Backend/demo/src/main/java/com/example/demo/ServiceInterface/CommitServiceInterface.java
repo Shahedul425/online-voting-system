@@ -5,6 +5,6 @@ import com.example.demo.Models.VoteModel;
 import java.util.UUID;
 
 public interface CommitServiceInterface {
-    VoteModel commitVote(UUID electionId, UUID candidateId, String voteCommitment, String requestId);
+    String commitVote(UUID electionId, UUID candidateId, String tokenId);
 
 }

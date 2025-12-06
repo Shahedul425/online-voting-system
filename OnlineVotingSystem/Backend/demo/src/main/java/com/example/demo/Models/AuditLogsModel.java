@@ -25,10 +25,12 @@ public class AuditLogsModel {
     @ManyToOne
     @JoinColumn(name = "electionId")
     private ElectionModel election;
-    private String entityType;
+//    private String entityType;
     private String entityId;
     private String details;
-    private String requestId;
+//    private String requestId;
+    private String status;
+    private String httpStatus;
     private LocalDateTime createdAt;
     @ManyToOne
     @JoinColumn(name = "organizatonId")

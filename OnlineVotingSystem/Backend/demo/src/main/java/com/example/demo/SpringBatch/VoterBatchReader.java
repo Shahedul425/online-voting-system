@@ -1,6 +1,6 @@
 package com.example.demo.SpringBatch;
 
-import com.example.demo.DTO.VoterCsvRequest;
+import com.example.demo.DAO.VoterCsvRequest;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.ExecutionContext;
 import org.springframework.batch.item.ItemStreamException;

@@ -1,6 +1,6 @@
 package com.example.demo.RestController;
 
-import com.example.demo.DTO.ImportReport;
+import com.example.demo.DAO.ImportReport;
 import com.example.demo.Service.AdminUploadService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;

@@ -19,6 +19,7 @@ public class UserInfoService implements com.example.demo.ServiceInterface.UserIn
     private final UserModelRepository userModelRepository;
     private final SecurityUtils securityUtils;
 
+
     @Override
     public String findOrCreateUser() {
         String keycloakId = securityUtils.getKeycloakId();

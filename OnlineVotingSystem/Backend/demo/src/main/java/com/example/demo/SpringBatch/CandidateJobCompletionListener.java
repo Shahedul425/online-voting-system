@@ -52,11 +52,10 @@ public class CandidateJobCompletionListener implements JobExecutionListener {
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            if(jobExecution.getStatus()== BatchStatus.COMPLETED){
-                System.out.println("Job completed!");
-                candidateListStagingRepo.deleteAllByJobId(jobId);
-            }
-
+        }
+        if(jobExecution.getStatus()== BatchStatus.COMPLETED){
+            System.out.println("Job completed!");
+            candidateListStagingRepo.deleteAllByJobId(jobId);
         }
     }
 }

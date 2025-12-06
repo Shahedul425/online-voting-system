@@ -1,6 +1,6 @@
 package com.example.demo.Service;
-import com.example.demo.DTO.ElectionRequest;
-import com.example.demo.DTO.ElectionUpdateRequest;
+import com.example.demo.DAO.ElectionRequest;
+import com.example.demo.DAO.ElectionUpdateRequest;
 import com.example.demo.Enums.ElectionStatus;
 import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.OrganizationModel;

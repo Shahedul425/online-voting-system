@@ -1,0 +1,15 @@
+package com.example.demo.Repositories;
+
+import com.example.demo.Models.VerificationAttemptModel;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface VerificationAttemptModelRepository extends JpaRepository<VerificationAttemptModel, UUID> {
+    public List<VerificationAttemptModel> findAllByUserId(UUID userId);
+    public Optional<VerificationAttemptModel> findById(UUID id);
+}

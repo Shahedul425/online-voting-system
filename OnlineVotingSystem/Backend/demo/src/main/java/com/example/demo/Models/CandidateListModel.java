@@ -20,7 +20,7 @@ public class CandidateListModel {
     private UUID id;
     @ManyToOne
     @JoinColumn(name = "electionId")
-    private ElectionModel election;
+    private ElectionModel electionId;
     private String firstName;
     private String lastName;
     private String photoUrl;

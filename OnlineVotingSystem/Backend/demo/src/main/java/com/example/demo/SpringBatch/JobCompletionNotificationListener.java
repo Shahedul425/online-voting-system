@@ -56,10 +56,11 @@ public class JobCompletionNotificationListener implements JobExecutionListener {
             }catch (Exception e){
                 e.printStackTrace();
             }
-            if (jobExecution.getStatus()==BatchStatus.COMPLETED){
-                System.out.println("Job and Staging Successfully Completed "+ jobId );
-                voterUploadStagingRepo.deleteAllByJobId(jobId);
-            }
+
+        }
+        if (jobExecution.getStatus()==BatchStatus.COMPLETED){
+            System.out.println("Job and Staging Successfully Completed "+ jobId );
+            voterUploadStagingRepo.deleteAllByJobId(jobId);
         }
     }
 }

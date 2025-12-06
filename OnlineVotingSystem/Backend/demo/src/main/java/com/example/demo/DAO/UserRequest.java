@@ -1,9 +1,6 @@
-package com.example.demo.DTO;
+package com.example.demo.DAO;
 
 import com.example.demo.Enums.Role;
-import jakarta.persistence.Column;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.stereotype.Component;

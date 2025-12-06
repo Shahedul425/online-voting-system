@@ -27,5 +27,8 @@ public interface VoterUploadStagingRepo extends JpaRepository<VoterUploadStaging
     @Query("DELETE FROM VoterUploadStaging v WHERE v.jobId = :jobId")
     void deleteAllByJobId(@Param("jobId") UUID jobId);
 
+    @Query("SELECT count(v) from VoterUploadStaging v where v.jobId=:jobId")
+    long countByJobId(@Param("jobId") UUID jobId);
+
     Page<VoterUploadStaging> findAllByJobId(UUID jobId, Pageable pageable);
 }

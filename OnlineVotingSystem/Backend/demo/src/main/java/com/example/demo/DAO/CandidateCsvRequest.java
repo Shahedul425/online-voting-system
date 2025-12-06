@@ -1,8 +1,8 @@
-package com.example.demo.DTO;
+package com.example.demo.DAO;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.springframework.stereotype.Component;
+
 @Getter
 @Setter
 public class CandidateCsvRequest {

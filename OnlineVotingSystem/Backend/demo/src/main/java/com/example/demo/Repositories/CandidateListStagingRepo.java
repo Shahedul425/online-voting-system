@@ -26,5 +26,7 @@ public interface CandidateListStagingRepo extends JpaRepository<CandidateUploadS
     @Query("DELETE FROM CandidateUploadStaging v WHERE v.jobId = :jobId")
     void deleteAllByJobId(@Param("jobId") UUID jobId);
 
+    @Query("SELECT count(c) from CandidateUploadStaging c where c.jobId=:jobId")
+    long countByJobId(@Param("jobId") UUID jobId);
     Page<CandidateUploadStaging> findAllByJobId(UUID jobId, Pageable pageable);
 }

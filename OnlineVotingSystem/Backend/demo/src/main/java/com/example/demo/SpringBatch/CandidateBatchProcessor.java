@@ -1,6 +1,6 @@
 package com.example.demo.SpringBatch;
 
-import com.example.demo.DTO.CandidateCsvRequest;
+import com.example.demo.DAO.CandidateCsvRequest;
 import com.example.demo.Models.CandidateUploadStaging;
 import org.springframework.batch.core.configuration.annotation.StepScope;
 import org.springframework.batch.item.ItemProcessor;
@@ -8,9 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 @Component
 @StepScope
@@ -23,6 +21,7 @@ public class CandidateBatchProcessor implements ItemProcessor<CandidateCsvReques
 
     @Value("#{jobParameters['importerId']}")
     private String importerId;
+
 
     private final Set<String> seenBallot = new HashSet<>();
 
@@ -37,35 +36,39 @@ public class CandidateBatchProcessor implements ItemProcessor<CandidateCsvReques
         candidateUploadStaging.setBallotSerial(item.getBallotSerial());
         candidateUploadStaging.setFirstName(item.getFirstName());
         candidateUploadStaging.setLastName(item.getLastName());
-        candidateUploadStaging.setLineNumber(candidateUploadStaging.getLineNumber());
+        candidateUploadStaging.setLineNumber(item.getLineNumber());
         candidateUploadStaging.setPhotoUrl(item.getPhotoUrl());
         candidateUploadStaging.setPosition(item.getPosition());
 
+        List<String> errors = new ArrayList<>();
+
+
         if(item.getPosition()==null||item.getPosition().isBlank()){
-            candidateUploadStaging.setValid(false);
-            candidateUploadStaging.setErrorMessage("Candidate Position is Missing");
+            errors.add("Candidate Position is Missing");
         }
         if(item.getParty()==null||item.getParty().isBlank()){
-            candidateUploadStaging.setValid(false);
-            candidateUploadStaging.setErrorMessage("Candidate Party is Missing");
+            errors.add("Candidate Party is Missing");
         }
         if(item.getLastName()==null||item.getLastName().isBlank()){
-            candidateUploadStaging.setValid(false);
-            candidateUploadStaging.setErrorMessage("Candidate lastName is Missing");
+            errors.add("Candidate lastName is Missing");
         }
         if(item.getFirstName()==null||item.getFirstName().isBlank()){
-            candidateUploadStaging.setValid(false);
-            candidateUploadStaging.setErrorMessage("Candidate firstName is Missing");
+            errors.add("Candidate firstName is Missing");
         }
         if(item.getBallotSerial()==null||item.getBallotSerial().isBlank()){
-            candidateUploadStaging.setValid(false);
-            candidateUploadStaging.setErrorMessage("Candidate ballotSerial is Missing");
+            errors.add("Candidate ballotSerial is Missing");
         }
-        if(!seenBallot.add(item.getBallotSerial())){
-            candidateUploadStaging.setValid(false);
-            candidateUploadStaging.setErrorMessage("Duplicate Ballot Serial");
+        if(item.getBallotSerial()!=null && !item.getBallotSerial().isBlank()){
+            if(!seenBallot.add(item.getBallotSerial())) {
+                errors.add("Duplicate Ballot Serial");
+            }
         }
-        candidateUploadStaging.setValid(true);
+        if(!errors.isEmpty()){
+            candidateUploadStaging.setValid(false);
+            candidateUploadStaging.setErrorMessage(String.join(";",errors));
+        }else {
+            candidateUploadStaging.setValid(true);
+        }
         return candidateUploadStaging;
     }
 }
