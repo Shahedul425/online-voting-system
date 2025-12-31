@@ -24,7 +24,8 @@ public class VoteModel {
     @ManyToOne
     @JoinColumn(name = "candidateId")
     private CandidateListModel candidateId;
-    private String voteCommitment;
+//    Later voteCommitment for advanced cryptography
+//    private String voteCommitment;
 //    private String regionCode
     @Column(unique = true)
     private String receiptHashToken;

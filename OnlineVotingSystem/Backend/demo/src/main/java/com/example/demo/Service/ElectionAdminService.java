@@ -6,6 +6,7 @@ import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.OrganizationModel;
 import com.example.demo.Models.UserModel;
 import com.example.demo.Repositories.ElectionModelRepository;
+import com.example.demo.Repositories.VoteModelRepository;
 import com.example.demo.ServiceInterface.ElectionAdminServiceInterface;
 import com.example.demo.ServiceInterface.UserInfoService;
 import com.example.demo.security.SecurityUtils;
@@ -23,6 +24,8 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
     private final SecurityUtils securityUtils;
     private final OrganizationService organizationService;
     private final ElectionModelRepository electionModelRepository;
+    private final MerkleTreeService merkleTreeService;
+    private final VoteModelRepository voteModelRepository;
     @Override
     public ElectionModel createElection(ElectionRequest electionRequest) {
         UserModel admin = userInfoService.getCurrentUser();
@@ -94,7 +97,7 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
 
     @Override
     public void publishElectionResult(String electionId) {
-
+        List<String> tokens = voteModelRepository.findReceiptTokensByElectionId(UUID.fromString(electionId));
         ElectionModel election = getElectionById(electionId);
         if (election == null) {
             throw  new RuntimeException ("Election not found");
@@ -103,7 +106,7 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
             throw new RuntimeException("Can't Publish Election");
         }
         election.setStatus(ElectionStatus.published);
-//        election.setMerkleRoot(computeMerkleRoote(electionId));
+        election.setMerkleRoot(merkleTreeService.buildMerkleTree(tokens));
 //        to do
         election.setPublishedAt(LocalDateTime.now());
         electionModelRepository.save(election);
