@@ -1,5 +1,8 @@
 package com.example.demo.Service;
 import com.auth0.jwt.interfaces.DecodedJWT;
+import com.example.demo.DAO.AuditLogsRequest;
+import com.example.demo.Enums.ActionStatus;
+import com.example.demo.Enums.AuditActions;
 import com.example.demo.Enums.Role;
 import com.example.demo.Models.UserModel;
 import com.example.demo.Repositories.UserModelRepository;
@@ -9,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,6 +22,7 @@ public class UserInfoService implements com.example.demo.ServiceInterface.UserIn
 
     private final UserModelRepository userModelRepository;
     private final SecurityUtils securityUtils;
+    private final SafeAuditService safeAuditService;
 
 
     @Override
@@ -41,7 +46,19 @@ public class UserInfoService implements com.example.demo.ServiceInterface.UserIn
             newUser.setKeycloakId(keycloakId);
             newUser.setEmail(email);
             newUser.setRole(systemRole);
-            userModelRepository.save(newUser);
+            UserModel user = userModelRepository.save(newUser);
+            safeAuditService.audit(
+                    AuditLogsRequest.builder()
+                            .actor(email)
+                            .action(AuditActions.CREATE_USER.toString())
+                            .entityId("USER")
+                            .status(ActionStatus.SUCCESS.toString())
+                            .electionId(null)
+                            .organizationId(user.getOrganization().getId().toString())
+                            .createdAt(LocalDateTime.now())
+                            .details("User created successfully")
+                            .build()
+            );
             return "User created!";
         }
     }
