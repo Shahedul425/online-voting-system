@@ -1,6 +1,7 @@
 package com.example.demo.Service;
 
 import com.example.demo.DAO.AuditLogsRequest;
+import com.example.demo.Enums.AuditActions;
 import com.example.demo.Models.AuditLogsModel;
 import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.OrganizationModel;
@@ -26,21 +27,23 @@ public class AuditFactoryService implements AuditFactoryInterface {
 
 
     @Override
-    public AuditLogsModel build(AuditLogsRequest auditLogsRequest) {
+    public void build(AuditLogsRequest auditLogsRequest) {
         AuditLogsModel auditLogsModel = new AuditLogsModel();
-        ElectionModel electionModel = electionModelRepository.findById(UUID.fromString(auditLogsRequest.getElectionId())).orElse(null);
+//        ElectionModel electionModel = electionModelRepository.findById(UUID.fromString(auditLogsRequest.getElectionId())).orElse(null);
         OrganizationModel organizationModel = organizationRepository.findById(UUID.fromString(auditLogsRequest.getOrganizationId())).orElse(null);
         UserModel userModel = userModelRepository.findById(UUID.fromString(auditLogsRequest.getActor())).orElse(null);
         if(userModel == null){
             throw new RuntimeException("User not found");
         }
-        if (electionModel == null) {
-            throw new RuntimeException("Election not found");
+        ElectionModel electionModel = null;
+        if (auditLogsRequest.getElectionId() != null) {
+            electionModel = electionModelRepository.findById(UUID.fromString(auditLogsRequest.getElectionId())).orElse(null);
         }
+
         if (organizationModel == null) {
             throw new RuntimeException("Organization not found");
         }
-        auditLogsModel.setAction(auditLogsRequest.getAction());
+        auditLogsModel.setAction(AuditActions.valueOf(auditLogsRequest.getAction()));
         auditLogsModel.setActor(userModel);
         auditLogsModel.setDetails(auditLogsRequest.getDetails());
         auditLogsModel.setElection(electionModel);
@@ -48,8 +51,7 @@ public class AuditFactoryService implements AuditFactoryInterface {
         auditLogsModel.setCreatedAt(LocalDateTime.now());
         auditLogsModel.setEntityId(auditLogsRequest.getEntityId());
         auditLogsModel.setStatus(auditLogsRequest.getStatus());
-        auditLogsModel.setHttpStatus(auditLogsRequest.getHttpStatus());
+//        auditLogsModel.setHttpStatus(auditLogsRequest.getHttpStatus());
         logsRepository.save(auditLogsModel);
-        return auditLogsModel;
     }
 }

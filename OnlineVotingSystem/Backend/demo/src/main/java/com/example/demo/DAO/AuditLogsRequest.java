@@ -1,5 +1,6 @@
 package com.example.demo.DAO;
 
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.stereotype.Component;
@@ -8,9 +9,9 @@ import java.time.LocalDateTime;
 
 @Getter
 @Setter
-@Component
+@Builder
 public class AuditLogsRequest {
-    private String id;
+//    private String id;
     private String actor;
     private String action;
     private String electionId;
