@@ -5,7 +5,7 @@ import com.example.demo.DAO.ElectionUpdateRequest;
 import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
 import com.example.demo.Enums.ElectionStatus;
-import com.example.demo.Exception.BusinessException;
+import com.example.demo.Exception.*;
 import com.example.demo.Models.*;
 import com.example.demo.Repositories.CandidateListRepository;
 import com.example.demo.Repositories.ElectionModelRepository;
@@ -13,6 +13,7 @@ import com.example.demo.Repositories.VoteModelRepository;
 import com.example.demo.Repositories.VoterListModelRepository;
 import com.example.demo.ServiceInterface.ElectionAdminServiceInterface;
 import com.example.demo.ServiceInterface.UserInfoService;
+import com.example.demo.Util.Ids;
 import com.example.demo.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,12 +21,11 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-
 @Service
 @RequiredArgsConstructor
 public class ElectionAdminService implements ElectionAdminServiceInterface {
+
     private final UserInfoService userInfoService;
-    private final SecurityUtils securityUtils;
     private final OrganizationService organizationService;
     private final ElectionModelRepository electionModelRepository;
     private final MerkleTreeService merkleTreeService;
@@ -35,513 +35,213 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
     private final VoterListModelRepository voterListModelRepository;
 
     @Override
-    public ElectionModel createElection(ElectionRequest electionRequest) {
+    public ElectionModel createElection(ElectionRequest req) {
         UserModel admin = userInfoService.getCurrentUser();
-        OrganizationModel organization = organizationService.findById(String.valueOf(admin.getOrganization().getId()));
-        ElectionModel election = null;
-        try {
-            if (organization == null) {
-                return null;
-//            Runtime Error later implementation to do
-            }
-            election = new ElectionModel();
-            election.setOrganization(organization);
-            election.setElectionType(electionRequest.getElectionType());
-            election.setDescription(electionRequest.getDescription());
-            election.setName(electionRequest.getName());
-            election.setCreatedBy(admin);
-            election.setStartTime(electionRequest.getStartTime());
-            election.setEndTime(electionRequest.getEndTime());
-            election.setStatus(ElectionStatus.draft);
-            election.setCreatedAt(LocalDateTime.now());
+        OrganizationModel org = admin.getOrganization();
+        if (org == null) throw new ForbiddenException("NO_ORG", "Current user is not assigned to an organization");
 
-            electionModelRepository.save(election);
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(admin.getId().toString())
-                            .action(String.valueOf(AuditActions.CREATE_ELECTION))
-                            .electionId(election.getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .details("Election created: " + election.getName())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.SUCCESS))
-                            .organizationId(organization.getId().toString())
-                            .build()
-            );
-            return election;
-        } catch (BusinessException e) {
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(admin.getId().toString())
-                            .action(String.valueOf(AuditActions.CREATE_ELECTION))
-                            .electionId(election.getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .details("Failed to create election: " + election.getName() + "Exception: " + e.getMessage())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.REJECTED))
-                            .organizationId(organization.getId().toString())
-                            .build()
-            );
-            throw e;
-        }
-        catch (Exception e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(admin.getId().toString())
-                            .action(AuditActions.CREATE_ELECTION.name())
-                            .details("System error: " + e.getMessage())
-                            .entityId("ELECTION")
-                            .organizationId(
-                                    admin.getOrganization() != null
-                                            ? admin.getOrganization().getId().toString()
-                                            : null
-                            )
-                            .status(ActionStatus.FAILED.name())
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-            throw e;
+        ElectionModel election = new ElectionModel();
+        election.setOrganization(org);
+        election.setElectionType(req.getElectionType());
+        election.setDescription(req.getDescription());
+        election.setName(req.getName());
+        election.setCreatedBy(admin);
+        election.setStartTime(req.getStartTime());
+        election.setEndTime(req.getEndTime());
+        election.setStatus(ElectionStatus.draft);
+        election.setCreatedAt(LocalDateTime.now());
 
+        // integrity: start < end
+        if (!req.getStartTime().isBefore(req.getEndTime())) {
+            safeAuditService.audit(audit(admin, null, org.getId(), AuditActions.CREATE_ELECTION, ActionStatus.REJECTED,
+                    "Invalid time window: startTime must be before endTime"));
+            throw new BadRequestException("INVALID_TIME_WINDOW", "startTime must be before endTime");
         }
+
+        ElectionModel saved = electionModelRepository.save(election);
+
+        safeAuditService.audit(audit(admin, saved.getId(), org.getId(), AuditActions.CREATE_ELECTION, ActionStatus.SUCCESS,
+                "Election created: " + saved.getName()));
+
+        return saved;
     }
 
     @Override
-    public String updateElection(String electionId, ElectionUpdateRequest request) {
-        ElectionModel election = getElectionById(electionId);
-        try {
-            if (election == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.UPDATE_ELECTION.toString())
-                                .details("Election update failed: " + election.getName() +" Election not found")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                return "Election Not Found";
-//            Exception to do
-            }
-            if(election.getStatus() != ElectionStatus.draft) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.UPDATE_ELECTION.toString())
-                                .details("Election update failed: " + election.getName() +" Election not in draft")
-                                .entityId("ELECTION")
-                                .createdAt(LocalDateTime.now())
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .build()
-                );
-                return "Election Not in Draft";
+    public String updateElection(String electionId, ElectionUpdateRequest req) {
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
 
-//            Exception To Do
-            }
-            election.setDescription(request.getDescription());
-            election.setName(request.getName());
-            election.setStartTime(request.getStartTime());
-            election.setEndTime(request.getEndTime());
-            electionModelRepository.save(election);
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.UPDATE_ELECTION.toString())
-                            .details("Election updated: " + election.getName())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.SUCCESS))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-            return "Election updated";
-        }catch (BusinessException e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.UPDATE_ELECTION.toString())
-                            .details("Election update failed: " + election.getName() +e.getMessage())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.REJECTED))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-            throw e;
-        }
-        catch (Exception e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.UPDATE_ELECTION.toString())
-                            .details("Election update failed: " + election.getName() +e.getMessage())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.FAILED))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-            throw e;
+        if (election.getStatus() != ElectionStatus.draft) {
+            safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                    AuditActions.UPDATE_ELECTION, ActionStatus.REJECTED, "Election not in draft"));
+            throw new ConflictException("ELECTION_NOT_DRAFT", "Only draft elections can be updated");
         }
 
+        if (req.getStartTime() != null && req.getEndTime() != null && !req.getStartTime().isBefore(req.getEndTime())) {
+            throw new BadRequestException("INVALID_TIME_WINDOW", "startTime must be before endTime");
+        }
+
+        if (req.getDescription() != null) election.setDescription(req.getDescription());
+        if (req.getName() != null) election.setName(req.getName());
+        if (req.getStartTime() != null) election.setStartTime(req.getStartTime());
+        if (req.getEndTime() != null) election.setEndTime(req.getEndTime());
+
+        electionModelRepository.save(election);
+
+        safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                AuditActions.UPDATE_ELECTION, ActionStatus.SUCCESS, "Election updated: " + election.getName()));
+
+        return "Election updated";
     }
-
 
     @Override
     public void startElection(String electionId) {
-        ElectionModel election = getElectionById(electionId);
-        try {
-            if (election == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.START_ELECTION.toString())
-                                .details("Election Starting failed: " + election.getName() + " Election not found")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                throw  new RuntimeException ("Election not found");
-            }
-            if(election.getStatus() == ElectionStatus.closed ||
-                    election.getStatus()==ElectionStatus.stopped||
-                    election.getStatus()==ElectionStatus.running||
-                    election.getStatus()==ElectionStatus.published) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.START_ELECTION.toString())
-                                .details("Election Starting failed: " + election.getName() + " Election not in draft or already running")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                throw new RuntimeException("Can't Start Election");
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
 
-            }
-            election.setStatus(ElectionStatus.running);
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.START_ELECTION.toString())
-                            .details("Election Started: " + election.getName())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.SUCCESS))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-        } catch (Exception e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.START_ELECTION.toString())
-                            .details("Election Starting failed: " + election.getName() + e.getMessage())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.FAILED))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
+        if (election.getStatus() != ElectionStatus.draft) {
+            safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                    AuditActions.START_ELECTION, ActionStatus.REJECTED, "Cannot start election from status: " + election.getStatus()));
+            throw new ConflictException("INVALID_ELECTION_STATE", "Election cannot be started");
         }
 
-//        AuditLog
+        election.setStatus(ElectionStatus.running);
+        electionModelRepository.save(election);
+
+        safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                AuditActions.START_ELECTION, ActionStatus.SUCCESS, "Election started"));
     }
 
     @Override
     public void stopElection(String electionId) {
-        ElectionModel election = getElectionById(electionId);
-        try {
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
 
-
-            if (election == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.STOP_ELECTION.toString())
-                                .details("Election Stopping failed: " + election.getName() + " Election not found")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                throw new RuntimeException("Election not found");
-            }
-            if (election.getStatus() != ElectionStatus.running) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.STOP_ELECTION.toString())
-                                .details("Election Stopping failed: " + election.getName() + " Election not Running")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                throw new RuntimeException("Can't Stop Election");
-            }
-            election.setStatus(ElectionStatus.stopped);
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.STOP_ELECTION.toString())
-                            .details("Election Stopped: " + election.getName())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.SUCCESS))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-        }catch (BusinessException e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.STOP_ELECTION.toString())
-                            .details("Election Stopping failed: " + election.getName())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.FAILED))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-        }catch (Exception e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.STOP_ELECTION.toString())
-                            .details("Election Stopping failed: " + election.getName() + e.getMessage())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.FAILED))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
+        if (election.getStatus() != ElectionStatus.running) {
+            safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                    AuditActions.STOP_ELECTION, ActionStatus.REJECTED, "Election not running"));
+            throw new ConflictException("ELECTION_NOT_RUNNING", "Election must be running to stop");
         }
 
-    }
+        election.setStatus(ElectionStatus.stopped);
+        electionModelRepository.save(election);
 
-    @Override
-    public void publishElectionResult(String electionId) {
-        List<String> tokens = voteModelRepository.findReceiptTokensByElectionId(UUID.fromString(electionId));
-        ElectionModel election = getElectionById(electionId);
-        try {
-            if (election == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(null)
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.PUBLISH_ELECTION.toString())
-                                .details("Election publish failed: " + election.getName() + " Election not found")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                throw  new RuntimeException ("Election not found");
-            }
-            if(election.getStatus()!=ElectionStatus.closed){
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.PUBLISH_ELECTION.toString())
-                                .details("Election publish failed: " + election.getName() + " Election not closed")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                throw new RuntimeException("Can't Publish Election");
-            }
-            election.setStatus(ElectionStatus.published);
-            election.setMerkleRoot(merkleTreeService.buildMerkleTree(tokens));
-
-//        to do
-            election.setPublishedAt(LocalDateTime.now());
-            electionModelRepository.save(election);
-//        AuditToDo
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.PUBLISH_ELECTION.toString())
-                            .details("Election published: " + election.getName())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.SUCCESS))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-        }catch (BusinessException e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.PUBLISH_ELECTION.toString())
-                            .details("Election publish failed: " + election.getName()+e.getMessage())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.FAILED))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-        }
-
+        safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                AuditActions.STOP_ELECTION, ActionStatus.SUCCESS, "Election stopped"));
     }
 
     @Override
     public void closeElection(String electionId) {
-        ElectionModel election = getElectionById(electionId);
-        try {
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
 
-
-            if (election == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.CLOSE_ELECTION.toString())
-                                .details("Election Closing failed: " + election.getName() + " Election not found")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                throw new RuntimeException("Election not found");
-            }
-            if (election.getStatus() != ElectionStatus.running) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .electionId(election.getId().toString())
-                                .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.CLOSE_ELECTION.toString())
-                                .details("Election Closing failed: " + election.getName() + " Election not Running")
-                                .entityId("ELECTION")
-                                .status(String.valueOf(ActionStatus.FAILED))
-                                .createdAt(LocalDateTime.now())
-                                .build()
-                );
-                throw new RuntimeException("Can't Close Election");
-            }
-            election.setStatus(ElectionStatus.closed);
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.CLOSE_ELECTION.toString())
-                            .details("Election closed: " + election.getName())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.SUCCESS))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
-        }catch (BusinessException e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .electionId(election.getId().toString())
-                            .organizationId(election.getOrganization().getId().toString())
-//                                check runtime might be problem
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.CLOSE_ELECTION.toString())
-                            .details("Election closing failed: " + election.getName()+e.getMessage())
-                            .entityId("ELECTION")
-                            .status(String.valueOf(ActionStatus.FAILED))
-                            .createdAt(LocalDateTime.now())
-                            .build()
-            );
+        if (election.getStatus() != ElectionStatus.running) {
+            safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                    AuditActions.CLOSE_ELECTION, ActionStatus.REJECTED, "Election not running"));
+            throw new ConflictException("ELECTION_NOT_RUNNING", "Election must be running to close");
         }
+
+        election.setStatus(ElectionStatus.closed);
+        electionModelRepository.save(election);
+
+        safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                AuditActions.CLOSE_ELECTION, ActionStatus.SUCCESS, "Election closed"));
     }
 
     @Override
-    public List<ElectionModel> getActiveElections(String id) {
-        UUID orgId = UUID.fromString(id);
-        return electionModelRepository.findByOrganizationIdAndStatus(orgId,ElectionStatus.running);
+    public void publishElectionResult(String electionId) {
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
+
+        if (election.getStatus() != ElectionStatus.closed) {
+            safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                    AuditActions.PUBLISH_ELECTION, ActionStatus.REJECTED, "Election not closed"));
+            throw new ConflictException("ELECTION_NOT_CLOSED", "Election must be closed to publish");
+        }
+
+        List<String> tokens = voteModelRepository.findReceiptTokensByElectionId(election.getId());
+        election.setMerkleRoot(merkleTreeService.buildMerkleTree(tokens));
+        election.setPublishedAt(LocalDateTime.now());
+        election.setStatus(ElectionStatus.published);
+
+        electionModelRepository.save(election);
+
+        safeAuditService.audit(audit(userInfoService.getCurrentUser(), election.getId(), election.getOrganization().getId(),
+                AuditActions.PUBLISH_ELECTION, ActionStatus.SUCCESS, "Election published"));
     }
 
     @Override
-    public List<CandidateListModel> getCandidateList(String id) {
-        UUID electionId = UUID.fromString(id);
-        return candidateListRepository.findAllByElectionId_Id(electionId);
+    public ElectionModel getElectionById(String electionId) {
+        return getElectionOrThrowAndScope(electionId);
+    }
+
+    // list methods can also be org-scoped (they already take orgId / electionId)
+    @Override
+    public List<ElectionModel> getActiveElections(String orgId) {
+        UUID id = Ids.uuid(orgId, "organizationId");
+        // enforce: current user org == requested org
+        UUID currentOrg = userInfoService.getCurrentUser().getOrganization().getId();
+        if (!currentOrg.equals(id)) throw new ForbiddenException("CROSS_ORG_ACCESS", "Forbidden");
+        return electionModelRepository.findByOrganizationIdAndStatus(id, ElectionStatus.running);
+    }
+
+    @Override
+    public List<CandidateListModel> getCandidateList(String electionId) {
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
+        return candidateListRepository.findAllByElectionId_Id(election.getId());
     }
 
     @Override
     public List<ElectionModel> getElectionByStatus(String status) {
-        return electionModelRepository.findByStatus(ElectionStatus.valueOf(status));
+        return List.of();
     }
 
     @Override
-    public List<VoterListModel> getVoterList(String id) {
-        UUID electionId = UUID.fromString(id);
-        return voterListModelRepository.findByElectionId(electionId);
-    }
-
-
-    @Override
-    public ElectionModel getElectionById(String electionId) {
-        return electionModelRepository.findById(UUID.fromString(electionId)).orElse(null);
+    public List<VoterListModel> getVoterList(String electionId) {
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
+        return voterListModelRepository.findByElectionId(election.getId());
     }
 
     @Override
-    public Long totalVoters(String id) {
-        UUID electionId = UUID.fromString(id);
-        return voterListModelRepository.countByElection_Id(electionId);
+    public Long totalVoters(String electionId) {
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
+        return voterListModelRepository.countByElection_Id(election.getId());
     }
 
     @Override
-    public Long totalCandidates(String id) {
-        UUID electionId = UUID.fromString(id);
-        return candidateListRepository.countByElectionId_Id(electionId);
+    public Long totalCandidates(String electionId) {
+        ElectionModel election = getElectionOrThrowAndScope(electionId);
+        return candidateListRepository.countByElectionId_Id(election.getId());
     }
 
     @Override
-    public List<ElectionModel> getAllElections(String id) {
-        UUID orgId = UUID.fromString(id);
-        return electionModelRepository.findByOrganizationId(orgId);
+    public List<ElectionModel> getAllElections(String orgId) {
+        UUID id = Ids.uuid(orgId, "organizationId");
+        UUID currentOrg = userInfoService.getCurrentUser().getOrganization().getId();
+        if (!currentOrg.equals(id)) throw new ForbiddenException("CROSS_ORG_ACCESS", "Forbidden");
+        return electionModelRepository.findByOrganizationId(id);
+    }
+
+    private ElectionModel getElectionOrThrowAndScope(String electionId) {
+        UUID eId = Ids.uuid(electionId, "electionId");
+        ElectionModel election = electionModelRepository.findById(eId)
+                .orElseThrow(() -> new NotFoundException("ELECTION_NOT_FOUND", "Election not found"));
+
+        UserModel user = userInfoService.getCurrentUser();
+        UUID userOrg = user.getOrganization().getId();
+        if (!election.getOrganization().getId().equals(userOrg)) {
+            safeAuditService.audit(audit(user, election.getId(), election.getOrganization().getId(),
+                    AuditActions.ACCESS_ELECTION, ActionStatus.FAILED, "Cross-org election access attempt"));
+            throw new ForbiddenException("CROSS_ORG_ACCESS", "You cannot access this election");
+        }
+        return election;
+    }
+
+    private AuditLogsRequest audit(UserModel actor, UUID electionId, UUID orgId, AuditActions action, ActionStatus status, String details) {
+        return AuditLogsRequest.builder()
+                .actor(actor != null ? actor.getId().toString() : null)
+                .electionId(electionId != null ? electionId.toString() : null)
+                .organizationId(orgId != null ? orgId.toString() : null)
+                .action(action.name())
+                .status(status.name())
+                .entityId("ELECTION")
+                .details(details)
+                .createdAt(LocalDateTime.now())
+                .build();
     }
 }

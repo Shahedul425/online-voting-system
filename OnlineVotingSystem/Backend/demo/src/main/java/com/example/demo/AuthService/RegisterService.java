@@ -1,6 +1,12 @@
 package com.example.demo.AuthService;
 
+import com.example.demo.Enums.Role;
 import com.example.demo.Exception.KeycloakEmailAlreadyExistsException;
+import com.example.demo.Models.OrganizationModel;
+import com.example.demo.Models.UserModel;
+import com.example.demo.Repositories.OrganizationRepository;
+import com.example.demo.Repositories.UserModelRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
@@ -12,12 +18,17 @@ import org.springframework.web.client.RestTemplate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class RegisterService {
 
     private final RestTemplate restTemplate = new RestTemplate();
 
+
+    private final UserModelRepository userModelRepository;
+    private final OrganizationRepository organizationRepository;
     private final String realm = "OVS-System";
     private final String keycloakUrl = "http://localhost:8081";
     private final String adminClientId = "admin-cli";
@@ -70,6 +81,24 @@ public class RegisterService {
                 new HttpEntity<>(user, headers),
                 String.class
             );
+            String location = response.getHeaders().getFirst("Location");
+            String keycloakId = location.substring(location.lastIndexOf("/") + 1);
+
+            assignRole(keycloakId, "voter", adminToken);
+            String emailDomain = email.split("@")[1].toLowerCase();
+            Optional<OrganizationModel> org = organizationRepository.findByDomain(emailDomain);
+
+            if(org.isEmpty()) {
+                throw new RuntimeException("No organization found for email domain: " + emailDomain);
+            }
+
+            // --- Create user in your DB immediately ---
+            UserModel newUser = new UserModel();
+            newUser.setKeycloakId(keycloakId);
+            newUser.setEmail(email);
+            newUser.setOrganization(org.get());
+            newUser.setRole(Role.voter); // or dynamic if needed
+            UserModel saved = userModelRepository.save(newUser);
         }catch (HttpClientErrorException e) {
 
             if (e.getStatusCode() == HttpStatus.CONFLICT && e.getResponseBodyAsString().contains("email")) {

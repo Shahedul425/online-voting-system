@@ -3,6 +3,7 @@ package com.example.demo.RestController;
 import com.example.demo.DAO.OrganizationRequest;
 import com.example.demo.Models.UserModel;
 import com.example.demo.Service.OrganizationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,11 +14,11 @@ import java.util.List;
 @RequestMapping("/org")
 @RequiredArgsConstructor
 public class OrganizationController {
+
     private final OrganizationService organizationService;
 
     @PostMapping("/create")
-    public ResponseEntity<?> createOrganization(@RequestBody OrganizationRequest organizationRequest){
-        organizationService.addOrganization(organizationRequest);
-        return ResponseEntity.ok().build();
+    public ResponseEntity<String> createOrganization(@Valid @RequestBody OrganizationRequest organizationRequest) {
+        return ResponseEntity.ok(organizationService.addOrganization(organizationRequest));
     }
 }

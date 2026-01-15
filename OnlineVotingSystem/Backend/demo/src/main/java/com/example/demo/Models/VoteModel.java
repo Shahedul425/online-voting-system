@@ -1,6 +1,7 @@
 package com.example.demo.Models;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,15 +20,16 @@ public class VoteModel {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
     @ManyToOne
-    @JoinColumn(name = "electionId")
+    @JoinColumn(name = "electionId" , nullable = false)
     private ElectionModel electionId;
     @ManyToOne
-    @JoinColumn(name = "candidateId")
+    @JoinColumn(name = "candidateId", nullable = false)
     private CandidateListModel candidateId;
 //    Later voteCommitment for advanced cryptography
 //    private String voteCommitment;
 //    private String regionCode
-    @Column(unique = true)
+    @Column(unique = true,nullable = false)
+    @NotBlank
     private String receiptHashToken;
 //    private String requestId;
     private LocalDateTime createdAt;

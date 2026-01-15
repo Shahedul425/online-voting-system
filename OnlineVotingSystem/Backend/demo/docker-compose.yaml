@@ -50,6 +50,7 @@ services:
 
 volumes:
   keycloak_db_data:
+  app_db_data:
 
 networks:
   keycloak-network:

@@ -14,10 +14,10 @@ public class AuditSpecification {
                     predicate,
                     criteriaBuilder.equal(root.get("election").get("id"), auditLogsRequest.getElectionId())
             );
-            if(auditLogsRequest.getActor()!=null){
+            if(auditLogsRequest.getActorId()!=null){
                 predicate = criteriaBuilder.and(
                         predicate,
-                        criteriaBuilder.equal(root.get("actor").get("id"), auditLogsRequest.getActor())
+                        criteriaBuilder.equal(root.get("actor").get("id"), auditLogsRequest.getActorId())
                 );
             }
             if(auditLogsRequest.getAction()!=null){

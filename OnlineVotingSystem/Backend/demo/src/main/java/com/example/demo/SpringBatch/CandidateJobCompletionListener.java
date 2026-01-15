@@ -3,6 +3,7 @@ package com.example.demo.SpringBatch;
 import com.example.demo.Models.CandidateUploadStaging;
 import com.example.demo.Repositories.CandidateListRepository;
 import com.example.demo.Repositories.CandidateListStagingRepo;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.BatchStatus;
 import org.springframework.batch.core.JobExecution;
@@ -24,6 +25,7 @@ public class CandidateJobCompletionListener implements JobExecutionListener {
     @Override
     public void beforeJob(JobExecution jobExecution) {}
 
+    @Transactional
     @Override
     public void afterJob(JobExecution jobExecution) {
         JobParameters jobParameters = jobExecution.getJobParameters();
