@@ -2,14 +2,13 @@ package com.example.demo.Service;
 import com.example.demo.DAO.AuditLogsRequest;
 import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
+import com.example.demo.Enums.ElectionStatus;
 import com.example.demo.Exception.BusinessException;
-import com.example.demo.Models.CandidateListModel;
-import com.example.demo.Models.ElectionModel;
-import com.example.demo.Models.OneTokenModel;
-import com.example.demo.Models.VoteModel;
-import com.example.demo.Repositories.CandidateListRepository;
-import com.example.demo.Repositories.ElectionModelRepository;
-import com.example.demo.Repositories.VoteModelRepository;
+import com.example.demo.Exception.ConflictException;
+import com.example.demo.Exception.ForbiddenException;
+import com.example.demo.Exception.NotFoundException;
+import com.example.demo.Models.*;
+import com.example.demo.Repositories.*;
 import com.example.demo.ServiceInterface.CommitServiceInterface;
 import com.example.demo.ServiceInterface.UserInfoService;
 import jakarta.transaction.Transactional;
@@ -18,14 +17,16 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
-
 @Service
 @RequiredArgsConstructor
 public class VoteCommitService implements CommitServiceInterface {
-    private final OneTimeTokenService oneTimeTokenService;
-    private final ElectionModelRepository electionModelRepository;
-    private final VoteModelRepository voteModelRepository;
-    private final CandidateListRepository candidateListRepository;
+
+    private final OneTimeTokenService tokenService;
+    private final OneTimeTokenModelRepository tokenRepo;
+    private final ElectionModelRepository electionRepo;
+    private final VoteModelRepository voteRepo;
+    private final CandidateListRepository candidateRepo;
+    private final VoterListModelRepository voterRepo;
     private final HashService hashService;
     private final UserInfoService userInfoService;
     private final SafeAuditService safeAuditService;
@@ -33,94 +34,83 @@ public class VoteCommitService implements CommitServiceInterface {
     @Override
     @Transactional
     public String commitVote(UUID electionId, UUID candidateId, String tokenId) {
-        boolean isTokenValid = oneTimeTokenService.validateToken(tokenId);
-        String reciptToken = hashService.generateOneTimeToke(electionId, candidateId);
-        CandidateListModel candidateListModel = candidateListRepository.findById(candidateId).orElse(null);
-        ElectionModel electionModel = electionModelRepository.findById(electionId).orElse(null);
-        try {
-            if (!isTokenValid) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .organizationId(electionModel.getOrganization().getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .entityId("VoteModel")
-                                .action(AuditActions.VOTE_CAST.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .details("Vote Casting Failed Due To Invalid Token: "+tokenId)
-                                .build()
-                );
-                throw new RuntimeException("Invalid token");
 
-            }
-            if (electionModel == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .organizationId(electionModel.getOrganization().getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .entityId("VoteModel")
-                                .action(AuditActions.VOTE_CAST.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .details("Vote Casting Failed Due To Election not Found: "+electionId)
-                                .build()
-                );
-                throw new RuntimeException("Election not found");
+        UserModel user = userInfoService.getCurrentUser();
 
-            }
-            if (candidateListModel == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .organizationId(electionModel.getOrganization().getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .entityId("VoteModel")
-                                .action(AuditActions.VOTE_CAST.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .details("Vote Casting Failed Due To Candidate Id: ")
-                                .build()
-                );
-                throw new RuntimeException("Candidate list not found");
+        ElectionModel election = electionRepo.findById(electionId)
+                .orElseThrow(() -> new NotFoundException("ELECTION_NOT_FOUND", "Election not found"));
 
-            }
-            VoteModel voteModel = new VoteModel();
-            voteModel.setCandidateId(candidateListModel);
-            voteModel.setElectionId(electionModel);
-            voteModel.setCreatedAt(LocalDateTime.now());
-            voteModel.setReceiptHashToken(reciptToken);
-            voteModelRepository.save(voteModel);
-            oneTimeTokenService.cosumeToken(UUID.fromString(tokenId));
-
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .electionId(electionModel.getId().toString())
-                            .organizationId(electionModel.getOrganization().getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .entityId("VoteModel")
-                            .action(AuditActions.VOTE_CAST.toString())
-                            .status(ActionStatus.SUCCESS.toString())
-                            .details("Vote Casting Successfully finished")
-                            .build()
-            );
-            return reciptToken;
-        }catch (BusinessException e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .electionId(electionModel.getId().toString())
-                            .organizationId(electionModel.getOrganization().getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .entityId("VoteModel")
-                            .action(AuditActions.VOTE_CAST.toString())
-                            .status(ActionStatus.FAILED.toString())
-                            .details("Vote Casting Failed: "+ e.getMessage())
-                            .build()
-            );
-            throw e;
+        if (!election.getOrganization().getId().equals(user.getOrganization().getId())) {
+            throw new ForbiddenException("CROSS_ORG_ACCESS", "Forbidden");
         }
+
+        if (election.getStatus() != ElectionStatus.running) {
+            throw new ConflictException("ELECTION_NOT_RUNNING", "Election is not running");
+        }
+
+        CandidateListModel candidate = candidateRepo.findById(candidateId)
+                .orElseThrow(() -> new NotFoundException("CANDIDATE_NOT_FOUND", "Candidate not found"));
+
+        if (!candidate.getElectionId().getId().equals(electionId)) {
+            throw new ConflictException("CANDIDATE_NOT_IN_ELECTION", "Candidate does not belong to this election");
+        }
+
+        OneTokenModel token = tokenRepo.findByTokenId(tokenId)
+                .orElseThrow(() -> new NotFoundException("TOKEN_NOT_FOUND", "Token not found"));
+
+        // token integrity
+        if (!token.getElection().getId().equals(electionId)) {
+            throw new ForbiddenException("TOKEN_WRONG_ELECTION", "Token is not valid for this election");
+        }
+        if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new ConflictException("TOKEN_EXPIRED", "Token has expired");
+        }
+        if (token.isConsumed()) {
+            throw new ConflictException("TOKEN_ALREADY_USED", "Token already used");
+        }
+
+        VoterListModel voter = token.getVoter();
+
+        // ensure token voter matches authenticated email (prevents token theft)
+        if (!voter.getEmail().equalsIgnoreCase(user.getEmail())) {
+            throw new ForbiddenException("TOKEN_NOT_FOR_USER", "Token is not for this user");
+        }
+        if (voter.isBlocked()) {
+            throw new ForbiddenException("VOTER_BLOCKED", "You are blocked from voting");
+        }
+        if (voter.isHasVoted()) {
+            throw new ConflictException("ALREADY_VOTED", "You have already voted");
+        }
+
+        // create receipt
+        String receiptToken = hashService.generateOneTimeToke(electionId, candidateId);
+
+        VoteModel vote = new VoteModel();
+        vote.setElectionId(election);
+        vote.setCandidateId(candidate);
+        vote.setCreatedAt(LocalDateTime.now());
+        vote.setReceiptHashToken(receiptToken);
+        voteRepo.save(vote);
+
+        // atomic consume
+        tokenService.consumeByTokenId(tokenId);
+
+        // mark voter voted
+        voter.setHasVoted(true);
+        voter.setVotedAt(LocalDateTime.now());
+        voterRepo.save(voter);
+
+        safeAuditService.audit(AuditLogsRequest.builder()
+                .actor(user.getId().toString())
+                .electionId(electionId.toString())
+                .organizationId(election.getOrganization().getId().toString())
+                .entityId("VoteModel")
+                .action(AuditActions.VOTE_CAST.name())
+                .status(ActionStatus.SUCCESS.name())
+                .details("Vote cast successfully")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        return receiptToken;
     }
 }

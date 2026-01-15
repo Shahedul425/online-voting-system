@@ -5,8 +5,9 @@ import com.example.demo.DAO.ImportReport;
 import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
 import com.example.demo.Enums.ElectionStatus;
-import com.example.demo.Exception.BusinessException;
+import com.example.demo.Exception.*;
 import com.example.demo.Models.ElectionModel;
+import com.example.demo.Models.UserModel;
 import com.example.demo.Repositories.ElectionModelRepository;
 import com.example.demo.Repositories.VoterListModelRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,6 +16,7 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.repository.JobExecutionAlreadyRunningException;
 import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.batch.core.repository.JobRestartException;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -24,214 +26,189 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class AdminUploadService {
-    private final VoterListModelRepository voterListModelRepository;
-    private final ElectionModelRepository electionModelRepository;
+
     private final JobLauncher jobLauncher;
-    private Job VoterImportJob;
-    private Job CandidateImportJob;
+    private final Job voterImportJob;
+    private final Job candidateImportJob;
+    private final ElectionModelRepository electionModelRepository;
     private final UserInfoService userInfoService;
     private final SafeAuditService safeAuditService;
+
+    public AdminUploadService(
+            JobLauncher jobLauncher,
+            @Qualifier("voterImportJob") Job voterImportJob,
+            @Qualifier("candidateImportJob") Job candidateImportJob,
+            ElectionModelRepository electionModelRepository,
+            UserInfoService userInfoService,
+            SafeAuditService safeAuditService
+    ) {
+        this.jobLauncher = jobLauncher;
+        this.voterImportJob = voterImportJob;
+        this.candidateImportJob = candidateImportJob;
+        this.electionModelRepository = electionModelRepository;
+        this.userInfoService = userInfoService;
+        this.safeAuditService = safeAuditService;
+    }
 
     public ImportReport importVoterList(
             MultipartFile file,
             UUID electionId,
-            UUID importerId,
             String voterIdColumn,
             String emailColumn
-            ) throws IOException, JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
+    ) throws Exception {
 
-        ElectionModel electionModel = electionModelRepository.findById(electionId).orElse(null);
-        try {
-            if (electionModel == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .entityId("VoterListModel")
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.UPLOAD_VOTERS.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                                .electionId(null)
-                                .createdAt(LocalDateTime.now())
-                                .details("VoterList upload failed due invalid electionId: "+electionId)
-                                .build()
-                );
-                throw new RuntimeException("Election not found");
-            }
-            if (electionModel.getStatus() != ElectionStatus.draft) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .entityId("VoterListModel")
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.UPLOAD_VOTERS.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .details("VoterList upload failed due invalid election is not in draft rather its in: "+ electionModel.getStatus())
-                                .build()
-                );
-                throw new RuntimeException("Only draft elections can be imported");
-            }
-            if (electionModel.isVoterListUploaded() == Boolean.TRUE) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .entityId("VoterListModel")
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.UPLOAD_VOTERS.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .details("VoterList upload failed because VoterList is already uploaded: "+electionId)
-                                .build()
-                );
-                throw new RuntimeException("Voter list Already Uploaded");
-            }
-            File temp = File.createTempFile(UUID.randomUUID().toString() + " VoterList ", ".csv");
-            file.transferTo(temp);
-            UUID jobId = UUID.randomUUID();
-            JobParameters jobParameters = new JobParametersBuilder()
-                    .addString("filePath", temp.getAbsolutePath())
-                    .addString("electionId", electionId.toString())
-                    .addString("jobId", jobId.toString())
-                    .addString("voterIdColumn", voterIdColumn)
-                    .addString("emailColumn", emailColumn)
-                    .addString("importerId", importerId.toString())
-                    .addLong("timestamp", System.currentTimeMillis())
-                    .toJobParameters();
+        UserModel actor = userInfoService.getCurrentUser();
+        ElectionModel election = electionModelRepository.findById(electionId).orElse(null);
 
-            JobExecution jobExecution = jobLauncher.run(VoterImportJob, jobParameters);
-            ImportReport importReport = new ImportReport();
-            importReport.setStatus(jobExecution.getStatus().toString());
-            importReport.setJobId(jobId.toString());
-            importReport.setErrorFilePath(temp.getAbsolutePath());
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .entityId("VoterListModel")
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.UPLOAD_VOTERS.toString())
-                            .status(ActionStatus.SUCCESS.toString())
-                            .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                            .electionId(electionModel.getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .details("VoterList uploaded successfully: "+electionId)
-                            .build()
-            );
-            return importReport;
-
-        }catch (BusinessException e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .entityId("VoterListModel")
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.UPLOAD_VOTERS.toString())
-                            .status(ActionStatus.FAILED.toString())
-                            .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                            .electionId(electionId.toString())
-                            .createdAt(LocalDateTime.now())
-                            .details("VoterList upload failed due to: "+e.getMessage())
-                            .build()
-            );
-            throw e;
+        if (election == null) {
+            safeAuditService.audit(failedAudit(actor, null, actor.getOrganization().getId(),
+                    AuditActions.UPLOAD_VOTERS, "Voter upload failed: election not found " + electionId));
+            throw new NotFoundException("ELECTION_NOT_FOUND", "Election not found");
         }
-    };
+
+        // org boundary
+        if (!election.getOrganization().getId().equals(actor.getOrganization().getId())) {
+            safeAuditService.audit(failedAudit(actor, electionId, actor.getOrganization().getId(),
+                    AuditActions.UPLOAD_VOTERS, "Cross-org voter upload attempt"));
+            throw new ForbiddenException("CROSS_ORG_ACCESS", "You cannot upload to this election");
+        }
+
+        if (election.getStatus() != ElectionStatus.draft) {
+            safeAuditService.audit(failedAudit(actor, electionId, actor.getOrganization().getId(),
+                    AuditActions.UPLOAD_VOTERS, "Election not draft: " + election.getStatus()));
+            throw new ConflictException("ELECTION_NOT_DRAFT", "Only draft elections can be imported");
+        }
+
+        if (Boolean.TRUE.equals(election.isVoterListUploaded())) {
+            safeAuditService.audit(failedAudit(actor, electionId, actor.getOrganization().getId(),
+                    AuditActions.UPLOAD_VOTERS, "Voter list already uploaded"));
+            throw new ConflictException("VOTER_LIST_ALREADY_UPLOADED", "Voter list already uploaded");
+        }
+
+        validateCsvFile(file);
+
+        File temp = File.createTempFile(UUID.randomUUID() + "_voters_", ".csv");
+        file.transferTo(temp);
+
+        UUID jobId = UUID.randomUUID();
+
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addString("filePath", temp.getAbsolutePath())
+                .addString("electionId", electionId.toString())
+                .addString("jobId", jobId.toString())
+                .addString("voterIdColumn", voterIdColumn)
+                .addString("emailColumn", emailColumn)
+                .addString("importerId", actor.getId().toString()) // don't trust client param
+                .addLong("timestamp", System.currentTimeMillis())
+                .toJobParameters();
+
+        JobExecution jobExecution = jobLauncher.run(voterImportJob, jobParameters);
+
+        ImportReport report = new ImportReport();
+        report.setStatus(jobExecution.getStatus().toString());
+        report.setJobId(jobId.toString());
+        report.setErrorFilePath(temp.getAbsolutePath());
+
+        safeAuditService.audit(successAudit(actor, electionId, actor.getOrganization().getId(),
+                AuditActions.UPLOAD_VOTERS, "Voter upload job started. jobId=" + jobId + ", file=" + file.getOriginalFilename()));
+
+        return report;
+    }
+
     public ImportReport importCandidateList(
             MultipartFile file,
-            UUID electionId,
-            UUID importerId
-    ) throws IOException, JobInstanceAlreadyCompleteException, JobExecutionAlreadyRunningException, JobParametersInvalidException, JobRestartException {
-        ElectionModel electionModel = electionModelRepository.findById(electionId).orElse(null);
-        try {
-            if (electionModel == null) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .entityId("CandidateListModel")
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.UPLOAD_CANDIDATES.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                                .electionId(null)
-                                .createdAt(LocalDateTime.now())
-                                .details("CandidateList upload failed due invalid electionId: " + electionId)
-                                .build()
-                );
-                throw new RuntimeException("Election not found");
-            }
-            if (electionModel.getStatus() != ElectionStatus.draft) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .entityId("CandidateListModel")
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.UPLOAD_CANDIDATES.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .details("CandidateList upload failed because election not in draft rather its in: " + electionModel.getStatus())
-                                .build()
-                );
-                throw new RuntimeException("Only draft elections can be imported");
-            }
-            if (electionModel.isCandidateListUploaded() == Boolean.TRUE) {
-                safeAuditService.audit(
-                        AuditLogsRequest.builder()
-                                .entityId("CandidateListModel")
-                                .actor(userInfoService.getCurrentUser().getId().toString())
-                                .action(AuditActions.UPLOAD_CANDIDATES.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .details("CandidateList upload failed because candidateList is already uploaded: " + electionId)
-                                .build()
-                );
-                throw new RuntimeException("Candidate list Already Uploaded");
-            }
-            File temp = File.createTempFile(UUID.randomUUID().toString() + " candidateList", "csv");
-            file.transferTo(temp);
-            UUID jobId = UUID.randomUUID();
-            JobParameters jobParameters = new JobParametersBuilder()
-                    .addString("filepath", temp.getAbsolutePath())
-                    .addString("electionId", electionId.toString())
-                    .addString("jobId", jobId.toString())
-                    .addString("importerId", importerId.toString())
-                    .toJobParameters();
-            JobExecution jobExecution = jobLauncher.run(CandidateImportJob, jobParameters);
-            ImportReport importReport = new ImportReport();
-            importReport.setStatus(jobExecution.getStatus().toString());
-            importReport.setJobId(jobId.toString());
-            importReport.setErrorFilePath(temp.getAbsolutePath());
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .entityId("CandidateListModel")
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.UPLOAD_CANDIDATES.toString())
-                            .status(ActionStatus.SUCCESS.toString())
-                            .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                            .electionId(electionModel.getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .details("CandidateList uploaded Successfully: " + electionId)
-                            .build()
-            );
-            return importReport;
-        }catch (BusinessException e){
-            safeAuditService.audit(
-                    AuditLogsRequest.builder()
-                            .entityId("CandidateListModel")
-                            .actor(userInfoService.getCurrentUser().getId().toString())
-                            .action(AuditActions.UPLOAD_CANDIDATES.toString())
-                            .status(ActionStatus.FAILED.toString())
-                            .organizationId(userInfoService.getCurrentUser().getOrganization().getId().toString())
-                            .electionId(String.valueOf(electionId))
-                            .createdAt(LocalDateTime.now())
-                            .details("CandidateList upload failed due to: "+e.getMessage())
-                            .build()
-            );
-            throw e;
+            UUID electionId
+    ) throws Exception {
+
+        UserModel actor = userInfoService.getCurrentUser();
+        ElectionModel election = electionModelRepository.findById(electionId).orElse(null);
+
+        if (election == null) {
+            safeAuditService.audit(failedAudit(actor, null, actor.getOrganization().getId(),
+                    AuditActions.UPLOAD_CANDIDATES, "Candidate upload failed: election not found " + electionId));
+            throw new NotFoundException("ELECTION_NOT_FOUND", "Election not found");
         }
 
+        if (!election.getOrganization().getId().equals(actor.getOrganization().getId())) {
+            safeAuditService.audit(failedAudit(actor, electionId, actor.getOrganization().getId(),
+                    AuditActions.UPLOAD_CANDIDATES, "Cross-org candidate upload attempt"));
+            throw new ForbiddenException("CROSS_ORG_ACCESS", "You cannot upload to this election");
+        }
 
+        if (election.getStatus() != ElectionStatus.draft) {
+            safeAuditService.audit(failedAudit(actor, electionId, actor.getOrganization().getId(),
+                    AuditActions.UPLOAD_CANDIDATES, "Election not draft: " + election.getStatus()));
+            throw new ConflictException("ELECTION_NOT_DRAFT", "Only draft elections can be imported");
+        }
+
+        if (Boolean.TRUE.equals(election.isCandidateListUploaded())) {
+            safeAuditService.audit(failedAudit(actor, electionId, actor.getOrganization().getId(),
+                    AuditActions.UPLOAD_CANDIDATES, "Candidate list already uploaded"));
+            throw new ConflictException("CANDIDATE_LIST_ALREADY_UPLOADED", "Candidate list already uploaded");
+        }
+
+        validateCsvFile(file);
+
+        File temp = File.createTempFile(UUID.randomUUID() + "_candidates_", ".csv");
+        file.transferTo(temp);
+
+        UUID jobId = UUID.randomUUID();
+
+        JobParameters jobParameters = new JobParametersBuilder()
+                .addString("filePath", temp.getAbsolutePath())
+                .addString("electionId", electionId.toString())
+                .addString("jobId", jobId.toString())
+                .addString("importerId", actor.getId().toString())
+                .addLong("timestamp", System.currentTimeMillis())
+                .toJobParameters();
+
+        JobExecution jobExecution = jobLauncher.run(candidateImportJob, jobParameters);
+
+        ImportReport report = new ImportReport();
+        report.setStatus(jobExecution.getStatus().toString());
+        report.setJobId(jobId.toString());
+        report.setErrorFilePath(temp.getAbsolutePath());
+
+        safeAuditService.audit(successAudit(actor, electionId, actor.getOrganization().getId(),
+                AuditActions.UPLOAD_CANDIDATES, "Candidate upload job started. jobId=" + jobId + ", file=" + file.getOriginalFilename()));
+
+        return report;
+    }
+
+    private void validateCsvFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new BadRequestException("EMPTY_FILE", "Upload file cannot be empty");
+        }
+        String name = file.getOriginalFilename();
+        if (name == null || !name.toLowerCase().endsWith(".csv")) {
+            throw new BadRequestException("INVALID_FILE_TYPE", "Only .csv files are allowed");
+        }
+    }
+
+    private AuditLogsRequest successAudit(UserModel actor, UUID electionId, UUID orgId, AuditActions action, String details) {
+        return AuditLogsRequest.builder()
+                .actor(actor != null ? actor.getId().toString() : null)
+                .electionId(electionId != null ? electionId.toString() : null)
+                .organizationId(orgId != null ? orgId.toString() : null)
+                .action(action.name())
+                .status(ActionStatus.SUCCESS.name())
+                .entityId("UPLOAD")
+                .details(details)
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+
+    private AuditLogsRequest failedAudit(UserModel actor, UUID electionId, UUID orgId, AuditActions action, String details) {
+        return AuditLogsRequest.builder()
+                .actor(actor != null ? actor.getId().toString() : null)
+                .electionId(electionId != null ? electionId.toString() : null)
+                .organizationId(orgId != null ? orgId.toString() : null)
+                .action(action.name())
+                .status(ActionStatus.FAILED.name())
+                .entityId("UPLOAD")
+                .details(details)
+                .createdAt(LocalDateTime.now())
+                .build();
     }
 }

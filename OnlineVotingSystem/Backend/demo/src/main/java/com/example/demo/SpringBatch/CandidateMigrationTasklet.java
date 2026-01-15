@@ -12,6 +12,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.batch.core.JobParameters;
 import org.springframework.batch.core.StepContribution;
+import org.springframework.batch.core.StepExecution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
 import org.springframework.batch.repeat.RepeatStatus;
@@ -36,8 +37,8 @@ public class CandidateMigrationTasklet implements Tasklet {
     @Override
     @Transactional
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
-        JobParameters jobParameters = (JobParameters) chunkContext.getStepContext().getJobParameters();
-        UUID jobId = UUID.fromString(jobParameters.getString("jobId"));
+        StepExecution stepExecution = chunkContext.getStepContext().getStepExecution();
+        JobParameters jobParameters = stepExecution.getJobParameters();        UUID jobId = UUID.fromString(jobParameters.getString("jobId"));
         UUID electionId = UUID.fromString(jobParameters.getString("electionId"));
         String importerId = jobParameters.getString("importerId");
         long invalidCount = candidateListStagingRepo.countInvalidByJobId(jobId);

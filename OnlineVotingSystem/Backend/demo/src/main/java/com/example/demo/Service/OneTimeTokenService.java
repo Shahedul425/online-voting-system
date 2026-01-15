@@ -3,8 +3,11 @@ import com.example.demo.DAO.AuditLogsRequest;
 import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
 import com.example.demo.Exception.BusinessException;
+import com.example.demo.Exception.ConflictException;
+import com.example.demo.Exception.NotFoundException;
 import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.OneTokenModel;
+import com.example.demo.Models.UserModel;
 import com.example.demo.Models.VoterListModel;
 import com.example.demo.Repositories.ElectionModelRepository;
 import com.example.demo.Repositories.OneTimeTokenModelRepository;
@@ -12,127 +15,73 @@ import com.example.demo.Repositories.VoteModelRepository;
 import com.example.demo.Repositories.VoterListModelRepository;
 import com.example.demo.ServiceInterface.TokenServiceInterface;
 import jakarta.el.ELClass;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
-
 @Service
 @RequiredArgsConstructor
 public class OneTimeTokenService implements TokenServiceInterface {
-    private final ElectionModelRepository electionModelRepository;
-    private final VoterListModelRepository voterListModelRepository;
-    private final OneTimeTokenModelRepository oneTimeTokenModelRepository;
+
+    private final OneTimeTokenModelRepository tokenRepo;
     private final SafeAuditService auditService;
     private final UserInfoService userService;
+
     @Override
-    public OneTokenModel issueToken(String requestId, ElectionModel electionModel, VoterListModel voterId) {
-//        ElectionModel electionModel = electionModelRepository.findById(electionId).orElse(null);
-//        if (electionModel == null) {
-//            throw new RuntimeException("Election not found");
-//        }
-//        VoterListModel voter = voterListModelRepository.findById(voterId).orElse(null);
-//        if(voter == null) {
-//            throw new RuntimeException("Voter not found");
-//        }
+    public OneTokenModel issueToken(String requestId, ElectionModel election, VoterListModel voter) {
+        UserModel actor = userService.getCurrentUser();
 
-        try {
-            OneTokenModel oneTokenModel = new OneTokenModel();
-            oneTokenModel.setIssuedAt(LocalDateTime.now());
-            oneTokenModel.setElection(electionModel);
-            oneTokenModel.setConsumed(false);
-            oneTokenModel.setVoter(voterId);
-            oneTokenModel.setTokenId(UUID.randomUUID().toString());
-            oneTokenModel.setRequestId(requestId);
-            oneTokenModel.setExpiresAt(LocalDateTime.now().plusMinutes(10));
-            oneTimeTokenModelRepository.save(oneTokenModel);
-            auditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(userService.getCurrentUser().getId().toString())
-                            .electionId(electionModel.getId().toString())
-                            .organizationId(electionModel.getOrganization().getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .action(AuditActions.ISSUE_ONETIME_TOKEN.toString())
-                            .status(ActionStatus.SUCCESS.toString())
-                            .details("OneTimeToken issued Successfully")
-                            .entityId("OneTimeTokenModel")
-                            .build()
-            );
+        OneTokenModel t = new OneTokenModel();
+        t.setIssuedAt(LocalDateTime.now());
+        t.setExpiresAt(LocalDateTime.now().plusMinutes(10));
+        t.setElection(election);
+        t.setVoter(voter);
+        t.setConsumed(false);
+        t.setTokenId(UUID.randomUUID().toString());
+        t.setRequestId(requestId);
 
-            return oneTokenModel;
-        }catch (BusinessException e){
-            auditService.audit(
-                    AuditLogsRequest.builder()
-                    .actor(userService.getCurrentUser().getId().toString())
-                    .electionId(electionModel.getId().toString())
-                    .organizationId(electionModel.getOrganization().getId().toString())
-                    .createdAt(LocalDateTime.now())
-                    .action(AuditActions.ISSUE_ONETIME_TOKEN.toString())
-                    .status(ActionStatus.FAILED.toString())
-                    .details("OneTimeToken failed to issue: " + e.getMessage())
-                    .entityId("OneTimeTokenModel")
-                    .build()
-            );
-            throw e;
-        }
+        OneTokenModel saved = tokenRepo.save(t);
+
+        auditService.audit(AuditLogsRequest.builder()
+                .actor(actor != null ? actor.getId().toString() : null)
+                .electionId(election.getId().toString())
+                .organizationId(election.getOrganization().getId().toString())
+                .action(AuditActions.ISSUE_ONETIME_TOKEN.name())
+                .status(ActionStatus.SUCCESS.name())
+                .entityId("OneTimeTokenModel")
+                .details("One-time token issued")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        return saved;
     }
 
     @Override
-    public void cosumeToken(UUID tokenId) {
-        OneTokenModel oneTokenModel = oneTimeTokenModelRepository.findById(tokenId).orElse(null);
-        try {
-            if (oneTokenModel == null) {
-                auditService.audit(
-                        AuditLogsRequest.builder()
-                                .actor(userService.getCurrentUser().getId().toString())
-                                .electionId(oneTokenModel.getElection().getId().toString())
-                                .organizationId(oneTokenModel.getElection().getOrganization().getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .action(AuditActions.CONSUME_ONETIME_TOKEN.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .details("OneTimeToken Consumption Failed due to token not found: " + tokenId)
-                                .entityId("OneTimeTokenModel")
-                                .build()
-                );
-                throw new RuntimeException("OneTimeToken not found");
+    @Transactional
+    public void cosumeToken(UUID tokenEntityId) {
+        // atomic consume by entity ID (if you really want this signature)
+        int updated = tokenRepo.consumeIfNotConsumed(tokenEntityId);
+        if (updated == 0) {
+            throw new ConflictException("TOKEN_ALREADY_USED_OR_NOT_FOUND", "Token is already consumed or not found");
+        }
+    }
 
-            }
+    @Transactional
+    public void consumeByTokenId(String tokenId) {
+        OneTokenModel token = tokenRepo.findByTokenId(tokenId)
+                .orElseThrow(() -> new NotFoundException("TOKEN_NOT_FOUND", "Token not found"));
 
-            oneTokenModel.setConsumed(true);
-            oneTimeTokenModelRepository.save(oneTokenModel);
-            auditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(userService.getCurrentUser().getId().toString())
-                            .electionId(oneTokenModel.getElection().getId().toString())
-                            .organizationId(oneTokenModel.getElection().getOrganization().getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .action(AuditActions.CONSUME_ONETIME_TOKEN.toString())
-                            .status(ActionStatus.SUCCESS.toString())
-                            .details("OneTimeToken Consumed Successfully")
-                            .entityId("OneTimeTokenModel")
-                            .build()
-            );
-
-        }catch (BusinessException e){
-            auditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(userService.getCurrentUser().getId().toString())
-                            .electionId(oneTokenModel.getElection().getId().toString())
-                            .organizationId(oneTokenModel.getElection().getOrganization().getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .action(AuditActions.CONSUME_ONETIME_TOKEN.toString())
-                            .status(ActionStatus.FAILED.toString())
-                            .details("OneTimeToken Consumption Failed due to token not found: "+e.getMessage())
-                            .entityId("OneTimeTokenModel")
-                            .build()
-            );
+        int updated = tokenRepo.consumeIfNotConsumed(token.getId());
+        if (updated == 0) {
+            throw new ConflictException("TOKEN_ALREADY_USED", "Token already consumed");
         }
     }
 
     @Override
     public boolean validateToken(String tokenId) {
-        OneTokenModel oneTokenModel = oneTimeTokenModelRepository.findByRequestId(tokenId);
-        return oneTokenModel != null && !oneTokenModel.getExpiresAt().isBefore(LocalDateTime.now()) && !oneTokenModel.isConsumed();
+        OneTokenModel t = tokenRepo.findByTokenId(tokenId).orElse(null);
+        return t != null && !t.getExpiresAt().isBefore(LocalDateTime.now()) && !t.isConsumed();
     }
 }

@@ -7,7 +7,9 @@ import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
 import com.example.demo.Exception.BusinessException;
 import com.example.demo.Exception.KeycloakEmailAlreadyExistsException;
+import com.example.demo.Repositories.OrganizationRepository;
 import com.example.demo.Service.SafeAuditService;
+import com.example.demo.Service.UserInfoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,18 +18,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.Map;
 @RestController
+@RequiredArgsConstructor
 public class AuthController {
     private final LoginService loginService;
     private final RegisterService registerService;
     private final SafeAuditService safeAuditService;
-    public AuthController(LoginService loginService, RegisterService registerService, SafeAuditService safeAuditService) {
-        this.loginService = loginService;
-        this.registerService = registerService;
-        this.safeAuditService = safeAuditService;
-    }
+    private final UserInfoService userInfoService;
+    private final OrganizationRepository organizationRepository;
 
     @PostMapping("/public/auth/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
@@ -87,6 +86,7 @@ public class AuthController {
 
         try {
             registerService.register(username, email, firstName, lastName, password);
+//            userInfoService.findOrCreateUser();
             safeAuditService.audit(
                     AuditLogsRequest.builder()
                             .actor(email)
@@ -104,7 +104,7 @@ public class AuthController {
         } catch (KeycloakEmailAlreadyExistsException ex) {
             safeAuditService.audit(
                     AuditLogsRequest.builder()
-                            .actor(email)
+                            .actor(null)
                             .action(AuditActions.USER_REGISTRATION.toString())
                             .entityId("USER")
                             .status(ActionStatus.FAILED.toString())
@@ -120,7 +120,7 @@ public class AuthController {
         } catch (Exception ex) {
             safeAuditService.audit(
                     AuditLogsRequest.builder()
-                            .actor(email)
+                            .actor(null)
                             .action(AuditActions.USER_REGISTRATION.toString())
                             .entityId("USER")
                             .status(ActionStatus.FAILED.toString())
@@ -132,7 +132,7 @@ public class AuthController {
             );
 
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("error", "Unknown registration error"));
+                    .body(Map.of("error", ex.getMessage()));
         }
     };
 

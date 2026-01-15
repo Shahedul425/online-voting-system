@@ -3,7 +3,8 @@ import com.example.demo.DAO.AuditLogsRequest;
 import com.example.demo.DTO.TokenDTO;
 import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
-import com.example.demo.Exception.BusinessException;
+import com.example.demo.Enums.ElectionStatus;
+import com.example.demo.Exception.*;
 import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.OneTokenModel;
 import com.example.demo.Models.UserModel;
@@ -11,128 +12,112 @@ import com.example.demo.Models.VoterListModel;
 import com.example.demo.Repositories.ElectionModelRepository;
 import com.example.demo.Repositories.VoterListModelRepository;
 import com.example.demo.ServiceInterface.VerificationServiceInterface;
+import com.example.demo.Util.Ids;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
-
 @Service
 @RequiredArgsConstructor
 public class VerificationService implements VerificationServiceInterface {
+
     private final SafeAuditService auditService;
-    private final UserInfoService userService;
-    private final VoterListModelRepository volterListModelRepository;
-    private final ElectionModelRepository electionModelRepository;
-    private final OneTimeTokenService oneTimeTokenService;
-    private final VerificationAttemptService verificationAttemptService;
-    private final  UserInfoService userInfoService;
+    private final UserInfoService userInfoService;
+    private final VoterListModelRepository voterRepo;
+    private final ElectionModelRepository electionRepo;
+    private final OneTimeTokenService tokenService;
+
     @Override
+    @Transactional
     public TokenDTO verfication(String voterId, String electionId) {
 
-        UUID requestId = UUID.randomUUID();
-        UUID electionId1 = UUID.fromString(electionId);
-        OneTokenModel token = null;
-        ElectionModel electionModel = electionModelRepository.findById(electionId1).orElse(null);
-        try {
-            if (electionModel == null) {
-                auditService.audit(
-                        AuditLogsRequest.builder()
-                                .actor(userService.getCurrentUser().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .organizationId(electionModel.getOrganization().getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .action(AuditActions.VOTER_VERIFICATION.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .details("Voter verification failed due to No Responding Election")
-                                .entityId("None")
-                                .build()
-                );
-                throw new RuntimeException("Election not found");
-            }
-            boolean eligible;
+        UserModel user = userInfoService.getCurrentUser();
+        UUID eId = Ids.uuid(electionId, "electionId");
 
-            UserModel user = userInfoService.getCurrentUser();
-            Optional<VoterListModel> voter = volterListModelRepository.findByElectionIdAndVoterIdAndEmail(electionId1, voterId, user.getEmail());
-//        if(voter == null) {
-//            throw new RuntimeException("Voter not found");
-//        }
-            if (voter.isPresent()) {
-                voter.get().setVerified(true);
-                eligible = !voter.get().isBlocked() && !voter.get().isHasVoted();
-                volterListModelRepository.save(voter.get());
-                auditService.audit(
-                        AuditLogsRequest.builder()
-                                .actor(userService.getCurrentUser().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .organizationId(electionModel.getOrganization().getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .action(AuditActions.VOTER_VERIFICATION.toString())
-                                .status(ActionStatus.SUCCESS.toString())
-                                .details("Voter verification is Success and Voter is Eligible to Vote")
-                                .entityId("VoterList")
-                                .build()
-                );
-            } else {
-                eligible = false;
-                auditService.audit(
-                        AuditLogsRequest.builder()
-                                .actor(userService.getCurrentUser().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .organizationId(electionModel.getOrganization().getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .action(AuditActions.VOTER_VERIFICATION.toString())
-                                .status(ActionStatus.FAILED.toString())
-                                .details("Voter verification failed because voter is not eligible to vote")
-                                .entityId("None")
-                                .build()
-                );
-            }
-            if (eligible) {
-                token = oneTimeTokenService.issueToken(
-                        String.valueOf(requestId),
-                        electionModel, voter.get());
-                auditService.audit(
-                        AuditLogsRequest.builder()
-                                .actor(userService.getCurrentUser().getId().toString())
-                                .electionId(electionModel.getId().toString())
-                                .organizationId(electionModel.getOrganization().getId().toString())
-                                .createdAt(LocalDateTime.now())
-                                .action(AuditActions.VOTER_VERIFICATION.toString())
-                                .status(ActionStatus.SUCCESS.toString())
-                                .details("One Time token Issued to Voter to vote")
-                                .entityId("None")
-                                .build()
-                );
-            }
+        ElectionModel election = electionRepo.findById(eId)
+                .orElseThrow(() -> new NotFoundException("ELECTION_NOT_FOUND", "Election not found"));
 
-            return TokenDTO.builder()
-                    .expiryTime(token.getExpiresAt())
-                    .tokenId(token.getTokenId())
-                    .build();
-        }catch (BusinessException e){
-            auditService.audit(
-                    AuditLogsRequest.builder()
-                            .actor(userService.getCurrentUser().getId().toString())
-                            .electionId(electionModel.getId().toString())
-                            .organizationId(electionModel.getOrganization().getId().toString())
-                            .createdAt(LocalDateTime.now())
-                            .action(AuditActions.VOTER_VERIFICATION.toString())
-                            .status(ActionStatus.FAILED.toString())
-                            .details("Voter verification failed due to: "+e.getMessage())
-                            .entityId("None")
-                            .build()
-            );
-            throw e;
+        if (!election.getOrganization().getId().equals(user.getOrganization().getId())) {
+            auditService.audit(AuditLogsRequest.builder()
+                    .actor(user.getId().toString())
+                    .electionId(election.getId().toString())
+                    .organizationId(user.getOrganization().getId().toString())
+                    .action(AuditActions.VOTER_VERIFICATION.name())
+                    .status(ActionStatus.FAILED.name())
+                    .entityId("Verification")
+                    .details("Cross-org verification attempt")
+                    .createdAt(LocalDateTime.now())
+                    .build());
+            throw new ForbiddenException("CROSS_ORG_ACCESS", "Forbidden");
         }
 
+        // Recommended integrity: only verify while running
+        if (election.getStatus() != ElectionStatus.running) {
+            throw new ConflictException("ELECTION_NOT_RUNNING", "Election is not running");
+        }
+
+        Optional<VoterListModel> voterOpt =
+                voterRepo.findByElectionIdAndVoterIdAndEmail(eId, voterId, user.getEmail());
+
+        if (voterOpt.isEmpty()) {
+            auditService.audit(AuditLogsRequest.builder()
+                    .actor(user.getId().toString())
+                    .electionId(election.getId().toString())
+                    .organizationId(user.getOrganization().getId().toString())
+                    .action(AuditActions.VOTER_VERIFICATION.name())
+                    .status(ActionStatus.REJECTED.name())
+                    .entityId("VoterList")
+                    .details("Voter not found or email mismatch")
+                    .createdAt(LocalDateTime.now())
+                    .build());
+            throw new ForbiddenException("VOTER_NOT_FOUND", "Voter not found for this email");
+        }
+
+        VoterListModel voter = voterOpt.get();
+        voter.setVerified(true);
+
+        boolean eligible = !voter.isBlocked() && !voter.isHasVoted();
+        voterRepo.save(voter);
+
+        if (!eligible) {
+            auditService.audit(AuditLogsRequest.builder()
+                    .actor(user.getId().toString())
+                    .electionId(election.getId().toString())
+                    .organizationId(user.getOrganization().getId().toString())
+                    .action(AuditActions.VOTER_VERIFICATION.name())
+                    .status(ActionStatus.REJECTED.name())
+                    .entityId("VoterList")
+                    .details("Voter not eligible (blocked or already voted)")
+                    .createdAt(LocalDateTime.now())
+                    .build());
+            throw new ConflictException("VOTER_NOT_ELIGIBLE", "You are not eligible to vote");
+        }
+
+        String requestId = UUID.randomUUID().toString();
+        OneTokenModel token = tokenService.issueToken(requestId, election, voter);
+
+        auditService.audit(AuditLogsRequest.builder()
+                .actor(user.getId().toString())
+                .electionId(election.getId().toString())
+                .organizationId(user.getOrganization().getId().toString())
+                .action(AuditActions.VOTER_VERIFICATION.name())
+                .status(ActionStatus.SUCCESS.name())
+                .entityId("OneTimeToken")
+                .details("Token issued for voting")
+                .createdAt(LocalDateTime.now())
+                .build());
+
+        return TokenDTO.builder()
+                .tokenId(token.getTokenId())
+                .expiryTime(token.getExpiresAt())
+                .build();
     }
 
     @Override
     public boolean isEligible(String email, String voterId) {
-        return false;
+        throw new BadRequestException("NOT_IMPLEMENTED", "Not implemented yet");
     }
-
-
 }

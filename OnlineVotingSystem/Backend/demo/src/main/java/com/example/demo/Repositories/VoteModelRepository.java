@@ -14,4 +14,5 @@ public interface VoteModelRepository extends JpaRepository<VoteModel, UUID> {
     public Optional<VoteModel> findById(UUID id);
     @Query("select vt.receiptHashToken from VoteModel vt where vt.electionId = :id")
     public List<String> findReceiptTokensByElectionId(UUID id);
+
 }

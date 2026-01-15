@@ -1,7 +1,7 @@
 package com.example.demo.Repositories;
 
 import com.example.demo.Models.CandidateUploadStaging;
-import com.example.demo.Models.VoterUploadStaging;
+import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -23,8 +23,8 @@ public interface CandidateListStagingRepo extends JpaRepository<CandidateUploadS
     List<CandidateUploadStaging> findInvalidRowsByJobId(@Param("jobId") UUID jobId);
 
     @Modifying
-    @Query("DELETE FROM CandidateUploadStaging v WHERE v.jobId = :jobId")
-    void deleteAllByJobId(@Param("jobId") UUID jobId);
+    @Transactional
+    void deleteAllByJobId(UUID jobId);
 
     @Query("SELECT count(c) from CandidateUploadStaging c where c.jobId=:jobId")
     long countByJobId(@Param("jobId") UUID jobId);

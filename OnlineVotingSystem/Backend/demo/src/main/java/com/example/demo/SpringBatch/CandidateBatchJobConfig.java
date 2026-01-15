@@ -40,7 +40,7 @@ public class CandidateBatchJobConfig {
                 .tasklet((Tasklet) migrationTasklet,transactionManager)
                 .build();
     }
-    @Bean
+    @Bean(name = "candidateImportJob")
     public Job candidateUploadJob() {
         return new JobBuilder("candidateUploadJob", jobRepository)
                 .listener(listener)

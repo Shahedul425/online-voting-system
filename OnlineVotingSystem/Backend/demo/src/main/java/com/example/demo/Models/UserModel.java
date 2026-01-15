@@ -2,10 +2,11 @@ package com.example.demo.Models;
 
 import com.example.demo.Enums.Role;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -20,13 +21,21 @@ public class UserModel {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
     @Column(unique = true,nullable = false)
+    @NotBlank
+    @Size(max = 320)
+    @Email
     private String email;
     @Column(unique = true,nullable = false)
+    @NotBlank
     private String keycloakId;
     @Enumerated(EnumType.STRING)
+    @NotNull
     private Role role;
     private LocalDateTime createdAt;
+    @PrePersist
+    void onCreate() { createdAt = LocalDateTime.now(); }
     @ManyToOne
-    @JoinColumn(name = "organizationId")
+    @JoinColumn(name = "organizationId", nullable = false)
+    @NotNull
     private OrganizationModel organization;
 }
