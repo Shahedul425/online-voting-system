@@ -26,4 +26,8 @@ public class AuditController {
         // ✅ your previous controller passed params in wrong order
         return ResponseEntity.ok(auditService.findAuditById(auditId, electionId));
     }
+//    @GetMapping("/all/{electionId}")
+//    public ResponseEntity<Page<AuditLogsModel>> getAllAuditByElection(@PathVariable String electionId){
+//        return ResponseEntity.ok(auditService.)
+//    }
 }

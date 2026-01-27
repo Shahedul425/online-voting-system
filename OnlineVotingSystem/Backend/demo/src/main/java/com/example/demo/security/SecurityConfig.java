@@ -43,6 +43,7 @@ public class SecurityConfig {
                         .requestMatchers("/public/**").permitAll()
                         .requestMatchers("/admin/**").hasRole("admin")
                         .requestMatchers("/voter/**").hasRole("voter")
+                        .requestMatchers("/superadmin/**").hasRole("superadmin")
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth -> oauth

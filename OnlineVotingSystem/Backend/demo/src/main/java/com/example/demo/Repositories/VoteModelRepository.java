@@ -12,7 +12,11 @@ import java.util.UUID;
 @Repository
 public interface VoteModelRepository extends JpaRepository<VoteModel, UUID> {
     public Optional<VoteModel> findById(UUID id);
-    @Query("select vt.receiptHashToken from VoteModel vt where vt.electionId = :id")
+    @Query("select vt.receiptHashToken from VoteModel vt where vt.electionId.id = :id")
     public List<String> findReceiptTokensByElectionId(UUID id);
+
+    public VoteModel findVoteModelByReceiptHashToken(String receiptHashToken);
+
+    Optional<VoteModel> findByRequestId(String requestId);
 
 }

@@ -71,7 +71,7 @@ public class MerkleTreeService {
                     proofs.add(new MerkleProofDTO(right,false));
                     currentHash = parent;
                 }else if(right.equals(currentHash)){
-                    proofs.add(new MerkleProofDTO(left,false));
+                    proofs.add(new MerkleProofDTO(left,true));
                     currentHash = parent;
                 }
             }

@@ -12,4 +12,6 @@ public interface UserModelRepository extends JpaRepository<UserModel, UUID> {
     Optional<UserModel> findByKeycloakId(String keycloakId);
     Optional<UserModel>  findByEmail(String email);
     UserModel findByOrganizationId(UUID organizationId);
+
+    Optional<Object> findByEmailIgnoreCase(String email);
 }

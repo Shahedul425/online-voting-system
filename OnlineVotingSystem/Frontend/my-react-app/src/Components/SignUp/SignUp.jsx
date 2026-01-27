@@ -1,8 +1,18 @@
 import { useState } from "react";
-import {registerRequest} from "../../Service/Api/registerApi.js";
-import {useNavigate} from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
+import { registerRequest } from "../../Service/Api/registerApi";
+import { toAppError } from "../../Service/ErrorHandling/appError.js";
+import { ErrorBanner } from "../Errors/ErrorBanner.jsx";
+import { InlineFieldError } from "../Errors/InFieldError.jsx";
+import { mergeFieldErrors } from "../../Service/Api/formErrorHelpers.js";
+// import { withUnwrap } from "../../Service/Api/apiUnwrap.js";
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
 export default function SignUp() {
     const navigate = useNavigate();
+
     const [form, setForm] = useState({
         firstName: "",
         lastName: "",
@@ -10,171 +20,203 @@ export default function SignUp() {
         password: "",
         confirmPassword: "",
     });
-    const [error, setError] = useState("");
 
-    const handleChange = (e) => {
-        setForm({
-            ...form,
-            [e.target.name]: e.target.value
-        });
+    const [fieldErrors, setFieldErrors] = useState({});
+    const [error, setError] = useState(null);
+    const [busy, setBusy] = useState(false);
+
+    const onChange = (e) => {
+        const { name, value } = e.target;
+        setForm((p) => ({ ...p, [name]: value }));
+        setError(null);
+        setFieldErrors((p) => ({ ...p, [name]: "" }));
     };
 
-    const handleSubmit = async (e) => {
+    const validate = () => {
+        const next = {};
+
+        if (!form.firstName.trim()) next.firstName = "First name is required.";
+        if (!form.lastName.trim()) next.lastName = "Last name is required.";
+
+        if (!form.email.trim()) next.email = "Email is required.";
+        else if (!isValidEmail(form.email)) next.email = "Enter a valid email.";
+
+        if (!form.password) next.password = "Password is required.";
+        else if (form.password.length < 8)
+            next.password = "Password must be at least 8 characters.";
+
+        if (form.password !== form.confirmPassword)
+            next.confirmPassword = "Passwords do not match.";
+
+        setFieldErrors(next);
+        return Object.keys(next).length === 0;
+    };
+
+    const onSubmit = async (e) => {
         e.preventDefault();
+        setError(null);
 
-        if (form.password !== form.confirmPassword) {
-            alert("Passwords do not match");
-            return;
-        }
+        if (!validate()) return;
 
+        setBusy(true);
         try {
             await registerRequest(
                 form.email,
                 form.email, // username = email
-                form.firstName,
-                form.lastName,
+                form.firstName.trim(),
+                form.lastName.trim(),
                 form.password
             );
 
-            alert("✅ Registration successful! Please login.");
-            navigate("/signin");
+            navigate("/signin", {
+                replace: true,
+                state: { registered: true },
+            });
         } catch (err) {
-            setError(err.message)
-            alert(err.message)
+            const appErr = toAppError(err);
+            setError(appErr);
+            setFieldErrors((p) => mergeFieldErrors(p, appErr));
+        } finally {
+            setBusy(false);
         }
     };
 
     return (
-        <div className="h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4">
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 px-4">
+            <div className="w-full max-w-sm">
+                {/* Branding */}
+                <div className="text-center text-white mb-6">
+                    <h1 className="text-4xl font-extrabold tracking-tight text-indigo-500">
+                        OVM
+                    </h1>
+                    <p className="text-gray-300 text-sm mt-1">
+                        Secure Online Voting System
+                    </p>
+                </div>
 
-            {/* Logo / Branding */}
-            <div className="text-center text-white font-semibold mb-6">
-                <h1 className="text-4xl font-extrabold tracking-tight text-indigo-500 drop-shadow-md">
-                    OVM
-                </h1>
-                <p className="text-gray-300 text-sm mt-1 tracking-wide">
-                    Secure Online Voting System
-                </p>
-            </div>
+                <div className="rounded-2xl bg-gray-800/90 p-6 shadow-2xl border border-gray-700">
+                    <h2 className="text-center text-xl font-bold text-white">
+                        Create Account
+                    </h2>
+                    <p className="text-center text-xs text-gray-400 mt-1">
+                        Register to start voting
+                    </p>
 
-            <div className="w-full max-w-sm rounded-2xl bg-gray-800/90 p-6 shadow-2xl backdrop-blur-md border border-gray-700">
-                <h2 className="text-center text-xl font-bold text-white">
-                    Create Account
-                </h2>
-                <p className="text-center text-xs text-gray-400 mt-1">
-                    Register to start voting
-                </p>
+                    <ErrorBanner
+                        error={error}
+                        onClose={() => setError(null)}
+                        className="mt-4"
+                    />
 
-                <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+                    <form onSubmit={onSubmit} className="mt-5 space-y-4">
+                        {/* First name */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">
+                                First Name
+                            </label>
+                            <input
+                                name="firstName"
+                                type="text"
+                                value={form.firstName}
+                                onChange={onChange}
+                                className={[
+                                    "mt-1 block w-full rounded-lg border bg-gray-900 px-3 py-2 text-gray-100",
+                                    fieldErrors.firstName ? "border-red-500/50" : "border-gray-600",
+                                ].join(" ")}
+                            />
+                            <InlineFieldError message={fieldErrors.firstName} />
+                        </div>
 
-                    {/* First Name */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">
-                            First Name
-                        </label>
-                        <input
-                            name="firstName"
-                            type="text"
-                            required
-                            placeholder="John"
-                            className="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-gray-100"
-                            onChange={handleChange}
-                        />
+                        {/* Last name */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">
+                                Last Name
+                            </label>
+                            <input
+                                name="lastName"
+                                type="text"
+                                value={form.lastName}
+                                onChange={onChange}
+                                className={[
+                                    "mt-1 block w-full rounded-lg border bg-gray-900 px-3 py-2 text-gray-100",
+                                    fieldErrors.lastName ? "border-red-500/50" : "border-gray-600",
+                                ].join(" ")}
+                            />
+                            <InlineFieldError message={fieldErrors.lastName} />
+                        </div>
 
-                        {/* Last Name */}
-                        <label className="block text-sm font-medium text-gray-300 mt-2">
-                            Last Name
-                        </label>
-                        <input
-                            name="lastName"
-                            type="text"
-                            required
-                            placeholder="Doe"
-                            className="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-gray-100"
-                            onChange={handleChange}
-                        />
-                    </div>
+                        {/* Email */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">
+                                Email Address
+                            </label>
+                            <input
+                                name="email"
+                                type="email"
+                                value={form.email}
+                                onChange={onChange}
+                                className={[
+                                    "mt-1 block w-full rounded-lg border bg-gray-900 px-3 py-2 text-gray-100",
+                                    fieldErrors.email ? "border-red-500/50" : "border-gray-600",
+                                ].join(" ")}
+                            />
+                            <InlineFieldError message={fieldErrors.email} />
+                        </div>
 
-                    {/* Email */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">
-                            Email Address
-                        </label>
-                        <input
-                            name="email"
-                            type="email"
-                            required
-                            placeholder="you@example.com"
-                            className="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-gray-100"
-                            onChange={handleChange}
-                        />
-                    </div>
+                        {/* Password */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">
+                                Password
+                            </label>
+                            <input
+                                name="password"
+                                type="password"
+                                value={form.password}
+                                onChange={onChange}
+                                className={[
+                                    "mt-1 block w-full rounded-lg border bg-gray-900 px-3 py-2 text-gray-100",
+                                    fieldErrors.password ? "border-red-500/50" : "border-gray-600",
+                                ].join(" ")}
+                            />
+                            <InlineFieldError message={fieldErrors.password} />
+                        </div>
 
-                    {/* Password */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">
-                            Password
-                        </label>
-                        <input
-                            name="password"
-                            type="password"
-                            required
-                            placeholder="••••••••"
-                            className="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-gray-100"
-                            onChange={handleChange}
-                        />
-                    </div>
+                        {/* Confirm password */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300">
+                                Confirm Password
+                            </label>
+                            <input
+                                name="confirmPassword"
+                                type="password"
+                                value={form.confirmPassword}
+                                onChange={onChange}
+                                className={[
+                                    "mt-1 block w-full rounded-lg border bg-gray-900 px-3 py-2 text-gray-100",
+                                    fieldErrors.confirmPassword
+                                        ? "border-red-500/50"
+                                        : "border-gray-600",
+                                ].join(" ")}
+                            />
+                            <InlineFieldError message={fieldErrors.confirmPassword} />
+                        </div>
 
-                    {/* Confirm Password */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300">
-                            Confirm Password
-                        </label>
-                        <input
-                            name="confirmPassword"
-                            type="password"
-                            required
-                            placeholder="••••••••"
-                            className="mt-1 block w-full rounded-lg border border-gray-600 bg-gray-900 px-3 py-2 text-gray-100"
-                            onChange={handleChange}
-                        />
-                    </div>
-
-                    {/* Submit */}
-                    <div className="pt-1">
                         <button
                             type="submit"
-                            className="flex w-full justify-center rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+                            disabled={busy}
+                            className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition disabled:opacity-60"
                         >
-                            Sign Up
+                            {busy ? "Creating account..." : "Sign Up"}
                         </button>
-                    </div>
+                    </form>
 
-                    {/* Divider */}
-                    <div className="relative mt-4">
-                        <div className="absolute inset-0 flex items-center">
-                            <div className="w-full border-t border-gray-700" />
-                        </div>
-                        <div className="relative flex justify-center text-xs">
-                            <span className="bg-gray-800 px-2 text-gray-400">or</span>
-                        </div>
-                    </div>
-
-                    {/* Google */}
-                    <button
-                        type="button"
-                        className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-600 bg-gray-900 px-4 py-2 text-sm font-medium text-gray-100"
-                    >
-                        Continue with Google
-                    </button>
-                </form>
-
-                <p className="mt-5 text-center text-xs text-gray-400">
-                    Already registered?{" "}
-                    <a href="/login" className="font-semibold text-indigo-400">
-                        Sign in
-                    </a>
-                </p>
+                    <p className="mt-5 text-center text-xs text-gray-400">
+                        Already registered?{" "}
+                        <Link to="/signin" className="font-semibold text-indigo-400">
+                            Sign in
+                        </Link>
+                    </p>
+                </div>
             </div>
         </div>
     );

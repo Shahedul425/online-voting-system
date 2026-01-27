@@ -1,18 +1,19 @@
 package com.example.demo.Service;
 
+import com.example.demo.AuthService.RegisterService;
 import com.example.demo.DAO.AuditLogsRequest;
 import com.example.demo.DAO.OrganizationRequest;
 import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
-import com.example.demo.Exception.BadRequestException;
-import com.example.demo.Exception.BusinessException;
-import com.example.demo.Exception.ConflictException;
-import com.example.demo.Exception.NotFoundException;
+import com.example.demo.Enums.Role;
+import com.example.demo.Exception.*;
 import com.example.demo.Models.OrganizationModel;
 import com.example.demo.Models.UserModel;
 import com.example.demo.Repositories.OrganizationRepository;
+import com.example.demo.Repositories.UserModelRepository;
 import com.example.demo.ServiceInterface.OrganizationServiceInterface;
 import com.example.demo.Util.Ids;
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,9 @@ public class OrganizationService implements OrganizationServiceInterface {
     private final OrganizationRepository organizationRepository;
     private final SafeAuditService auditService;
     private final UserInfoService userService;
+    private final UserModelRepository userModelRepository;
+    private final UserInfoService userInfoService;
+    private final RegisterService registerService;
 
     @Override
     public OrganizationModel findById(String id) {
@@ -104,4 +108,67 @@ public class OrganizationService implements OrganizationServiceInterface {
     public String updateOrganization(OrganizationRequest organization) {
         throw new BadRequestException("NOT_IMPLEMENTED", "Not implemented yet");
     }
+
+    @Transactional
+    public String assignOrgAdmin(String emailRaw, UUID orgId) {
+        UserModel actor = userInfoService.getCurrentUser();
+        if (actor.getRole() != Role.superadmin) {
+            throw new ForbiddenException("FORBIDDEN", "Only super admins can assign org admins");
+        }
+
+        String email = emailRaw.trim().toLowerCase();
+
+        UserModel target = (UserModel) userModelRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "No user with this email"));
+
+        String domain = userInfoService.extractDomain(email);
+
+        // Derive org by domain (authoritative)
+        OrganizationModel orgByDomain = organizationRepository.findByDomain(domain)
+                .orElseThrow(() -> new BadRequestException(
+                        "ORG_NOT_ALLOWED",
+                        "Email domain is not registered to any organization"
+                ));
+
+        // Enforce the requested org matches the domain-derived org
+        if (!orgByDomain.getId().equals(orgId)) {
+            throw new BadRequestException(
+                    "DOMAIN_MISMATCH",
+                    "This email belongs to a different organization"
+            );
+        }
+
+        // Optional extra safety if you keep allowedDomains list
+        if (orgByDomain.getAllowedDomains() != null &&
+                !orgByDomain.getAllowedDomains().contains(domain)) {
+            throw new BadRequestException(
+                    "DOMAIN_MISMATCH",
+                    "User email domain not allowed for this org"
+            );
+        }
+
+        // Update DB
+        target.setRole(Role.admin);
+        target.setOrganization(orgByDomain);
+        userModelRepository.save(target);
+
+        // Update Keycloak
+        registerService.grantRealmRole(target.getKeycloakId(), "admin");
+        registerService.revokeRealmRole(target.getKeycloakId(),"voter");
+        // Audit
+        auditService.audit(AuditLogsRequest.builder()
+                .actor(actor.getId().toString())
+                .action(AuditActions.ASSIGN_ORG_ADMIN.name())
+                .entityId(target.getId().toString())
+                .status(ActionStatus.SUCCESS.name())
+                .organizationId(orgByDomain.getId().toString())
+                .electionId(null)
+                .createdAt(LocalDateTime.now())
+                .details("Assigned org admin to " + email)
+                .build());
+        return "Organization admin added successfully";
+    }
+
+
+
 }

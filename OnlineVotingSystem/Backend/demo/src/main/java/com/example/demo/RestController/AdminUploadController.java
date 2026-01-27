@@ -17,7 +17,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/election/upload")
+@RequestMapping("/admin/election/upload")
 @Validated
 public class AdminUploadController {
 

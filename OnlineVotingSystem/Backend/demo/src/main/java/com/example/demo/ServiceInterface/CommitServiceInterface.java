@@ -1,10 +1,12 @@
 package com.example.demo.ServiceInterface;
 
+import com.example.demo.DAO.VoteRequest;
+import com.example.demo.DTO.VoteReceiptResponse;
 import com.example.demo.Models.VoteModel;
 
 import java.util.UUID;
 
 public interface CommitServiceInterface {
-    String commitVote(UUID electionId, UUID candidateId, String tokenId);
+    VoteReceiptResponse commitVote(VoteRequest request);
 
 }
