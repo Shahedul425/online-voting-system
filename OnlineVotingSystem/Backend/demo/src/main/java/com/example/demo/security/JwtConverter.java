@@ -10,7 +10,7 @@ import java.util.*;
 @Component
 public class JwtConverter implements Converter<Jwt, Collection<GrantedAuthority>> {
 
-    private final Set<String> validRoles = Set.of("admin", "voter");
+    private final Set<String> validRoles = Set.of("admin", "voter","superadmin");
 
     @Override
     public Collection<GrantedAuthority> convert(Jwt jwt) {

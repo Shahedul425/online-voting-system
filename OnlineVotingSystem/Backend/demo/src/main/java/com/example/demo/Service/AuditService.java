@@ -74,4 +74,9 @@ public class AuditService implements AuditServiceInterface {
 
         return audit;
     }
+
+//    @Override
+//    public Page<AuditLogsModel> findAllByElectionId(String electionId) {
+//        return auditLogsRepository.findAllByElectionId(UUID.fromString(electionId));
+//    }
 }

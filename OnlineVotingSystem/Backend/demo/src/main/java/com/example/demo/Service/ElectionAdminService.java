@@ -187,8 +187,8 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
     }
 
     @Override
-    public List<ElectionModel> getElectionByStatus(String status) {
-        return List.of();
+    public List<ElectionModel> getElectionByStatus(String status,String orgId) {
+        return electionModelRepository.findByOrganizationIdAndStatus(UUID.fromString(orgId), ElectionStatus.valueOf(status));
     }
 
     @Override

@@ -5,6 +5,7 @@ import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
 import com.example.demo.Enums.Role;
 import com.example.demo.Exception.BadRequestException;
+import com.example.demo.Exception.ConflictException;
 import com.example.demo.Exception.ForbiddenException;
 import com.example.demo.Models.OrganizationModel;
 import com.example.demo.Models.UserModel;
@@ -46,7 +47,8 @@ public class UserInfoService implements com.example.demo.ServiceInterface.UserIn
 
         var existing = userModelRepository.findByKeycloakId(keycloakId);
         if (existing.isPresent()) {
-            return "User already exists!";
+            throw new ConflictException("USER_ALREADY_EXIST","CAN'T REGISTER USER");
+//            return "User already exists!";
         }
 
         String domain = extractDomain(email);
@@ -77,7 +79,7 @@ public class UserInfoService implements com.example.demo.ServiceInterface.UserIn
         return "User created!";
     }
 
-    private String extractDomain(String email) {
+    public String extractDomain(String email) {
         String e = email.trim().toLowerCase();
         int at = e.lastIndexOf("@");
         if (at < 0 || at == e.length() - 1) {
@@ -87,6 +89,9 @@ public class UserInfoService implements com.example.demo.ServiceInterface.UserIn
     }
 
     private Role mapToRole(List<String> roles) {
+        for (String r : roles) {
+            if (r.equalsIgnoreCase("super_admin")) return Role.superadmin;
+        }
         for (String r : roles) {
             if (r.equalsIgnoreCase("admin")) return Role.admin;
             if (r.equalsIgnoreCase("voter")) return Role.voter;

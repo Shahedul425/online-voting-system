@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/verification")
+@RequestMapping("/voter/verification")
 @RequiredArgsConstructor
 @Validated
 public class VerificationController {

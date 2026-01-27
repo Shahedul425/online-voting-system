@@ -7,7 +7,6 @@ import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.VoterListModel;
 import com.example.demo.Service.ElectionAdminService;
 import jakarta.validation.Valid;
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,9 +14,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/election")
+@RequestMapping("/admin/election")
 @RequiredArgsConstructor
-public class ElectionController {
+public class AdminElectionController {
 
     private final ElectionAdminService electionAdminService;
 
@@ -70,8 +69,8 @@ public class ElectionController {
     }
 
     @GetMapping("/ElectionByStatus")
-    public ResponseEntity<List<ElectionModel>> getElectionByStatus(@RequestParam String status) {
-        return ResponseEntity.ok(electionAdminService.getElectionByStatus(status));
+    public ResponseEntity<List<ElectionModel>> getElectionByStatus(@RequestParam String status,@RequestParam String orgId) {
+        return ResponseEntity.ok(electionAdminService.getElectionByStatus(status,orgId));
     }
 
     @GetMapping("/VoterListByElection/{electionId}")
@@ -98,4 +97,5 @@ public class ElectionController {
     public ResponseEntity<List<ElectionModel>> getAll(@PathVariable String orgId) {
         return ResponseEntity.ok(electionAdminService.getAllElections(orgId));
     }
+
 }

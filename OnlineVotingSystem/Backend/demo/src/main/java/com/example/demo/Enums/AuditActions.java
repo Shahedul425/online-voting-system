@@ -21,5 +21,6 @@ public enum AuditActions {
     USER_REGISTRATION,
     ACCESS_ELECTION,
     USER_LOGIN,
-    CREATE_USER
+    CREATE_USER,
+    ASSIGN_ORG_ADMIN
 }

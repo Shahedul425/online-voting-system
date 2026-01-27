@@ -11,4 +11,5 @@ import java.util.UUID;
 @Repository
 public interface AuditLogsRepository extends JpaRepository<AuditLogsModel, UUID>, JpaSpecificationExecutor<AuditLogsModel> {
 
+    List<AuditLogsModel> findAllByElectionId(UUID electionId);
 }

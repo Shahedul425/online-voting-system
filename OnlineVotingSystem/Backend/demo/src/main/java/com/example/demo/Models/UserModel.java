@@ -36,6 +36,5 @@ public class UserModel {
     void onCreate() { createdAt = LocalDateTime.now(); }
     @ManyToOne
     @JoinColumn(name = "organizationId", nullable = false)
-    @NotNull
     private OrganizationModel organization;
 }

@@ -15,7 +15,7 @@ public interface ElectionModelRepository extends JpaRepository<ElectionModel, UU
     Optional<ElectionModel> findById(UUID id);
     List<ElectionModel> findByOrganizationIdAndStatus(UUID organizationId, ElectionStatus status);
     @Query("select e from ElectionModel e where e.status=:status")
-    List<ElectionModel> findByStatus(ElectionStatus status);
+    List<ElectionModel> findByStatusAAndOrganizationId(ElectionStatus status, UUID organizationId);
     List<ElectionModel> findByOrganizationId(UUID organizationId);
 
 }

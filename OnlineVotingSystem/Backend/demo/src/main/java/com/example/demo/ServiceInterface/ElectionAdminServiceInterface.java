@@ -17,7 +17,7 @@ public interface ElectionAdminServiceInterface {
     void closeElection(String electionId);
     List<ElectionModel> getActiveElections(String id);
     List<CandidateListModel> getCandidateList(String id);
-    List<ElectionModel> getElectionByStatus(String status);
+    List<ElectionModel> getElectionByStatus(String status,String orgId);
     List<VoterListModel> getVoterList(String id);
     ElectionModel getElectionById(String electionId);
     Long totalVoters(String id);

@@ -22,9 +22,9 @@ public class VoteModel {
     @ManyToOne
     @JoinColumn(name = "electionId" , nullable = false)
     private ElectionModel electionId;
-    @ManyToOne
-    @JoinColumn(name = "candidateId", nullable = false)
-    private CandidateListModel candidateId;
+//    @ManyToOne
+//    @JoinColumn(name = "candidateId", nullable = false)
+//    private CandidateListModel candidateId;
 //    Later voteCommitment for advanced cryptography
 //    private String voteCommitment;
 //    private String regionCode
@@ -32,5 +32,7 @@ public class VoteModel {
     @NotBlank
     private String receiptHashToken;
 //    private String requestId;
+    @Column(length = 100, unique = true)
+    private String requestId;
     private LocalDateTime createdAt;
 }

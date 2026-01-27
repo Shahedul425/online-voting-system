@@ -3,10 +3,12 @@ package com.example.demo.authcontroller;
 import com.example.demo.AuthService.LoginService;
 import com.example.demo.AuthService.RegisterService;
 import com.example.demo.DAO.AuditLogsRequest;
+import com.example.demo.DAO.RegisterRequest;
 import com.example.demo.Enums.ActionStatus;
 import com.example.demo.Enums.AuditActions;
 import com.example.demo.Exception.BusinessException;
 import com.example.demo.Exception.KeycloakEmailAlreadyExistsException;
+import com.example.demo.Models.UserModel;
 import com.example.demo.Repositories.OrganizationRepository;
 import com.example.demo.Service.SafeAuditService;
 import com.example.demo.Service.UserInfoService;
@@ -24,6 +26,7 @@ import java.util.Map;
 public class AuthController {
     private final LoginService loginService;
     private final RegisterService registerService;
+    private final UserInfoService infoService;
     private final SafeAuditService safeAuditService;
     private final UserInfoService userInfoService;
     private final OrganizationRepository organizationRepository;
@@ -39,9 +42,10 @@ public class AuthController {
             String accessToken = (String) token.get("access_token");
 
             Map<String, Object> userInfo = loginService.getUserInfo(accessToken);
+//            UserModel user = infoService.getCurrentUser();
             safeAuditService.audit(
                     AuditLogsRequest.builder()
-                            .actor(username)
+                            .actor(null)
                             .action(AuditActions.USER_LOGIN.toString())
                             .electionId(null)
                             .organizationId(null)
@@ -60,7 +64,7 @@ public class AuthController {
         }catch (BusinessException e){
             safeAuditService.audit(
                     AuditLogsRequest.builder()
-                            .actor(username)
+                            .actor(null)
                             .electionId(null)
                             .organizationId(null)
                             .createdAt(LocalDateTime.now())
@@ -76,20 +80,15 @@ public class AuthController {
     }
 
     @PostMapping("/public/auth/register")
-    public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
+    public ResponseEntity<?> register(@RequestBody RegisterRequest body) {
 
-        String email = body.get("email");
-        String username = body.get("email");
-        String firstName = body.get("firstName");
-        String lastName = body.get("lastName");
-        String password = body.get("password");
 
         try {
-            registerService.register(username, email, firstName, lastName, password);
+            registerService.register(body);
 //            userInfoService.findOrCreateUser();
             safeAuditService.audit(
                     AuditLogsRequest.builder()
-                            .actor(email)
+                            .actor(body.email())
                             .action(AuditActions.USER_REGISTRATION.toString())
                             .entityId("USER")
                             .status(ActionStatus.SUCCESS.toString())
