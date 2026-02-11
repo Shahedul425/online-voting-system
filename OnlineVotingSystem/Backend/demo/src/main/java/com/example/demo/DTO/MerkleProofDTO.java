@@ -7,5 +7,5 @@ import lombok.Getter;
 @AllArgsConstructor
 public class MerkleProofDTO {
     private String siblingHash;
-    private boolean isLeftSibling;
+    private boolean LeftSibling;
 }

@@ -8,11 +8,13 @@ import com.example.demo.Models.VoterListModel;
 import com.example.demo.Service.ElectionAdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+import static net.logstash.logback.argument.StructuredArguments.kv;
 @RestController
 @RequestMapping("/admin/election")
 @RequiredArgsConstructor
@@ -23,11 +25,9 @@ public class AdminElectionController {
     @PostMapping("/create")
     public ResponseEntity<ElectionModel> createElection(@Valid @RequestBody ElectionRequest electionRequest) {
         ElectionModel created = electionAdminService.createElection(electionRequest);
-        return ResponseEntity.ok(created); // or ResponseEntity.status(201).body(created)
+        return ResponseEntity.ok(created);
     }
 
-    // Keep your original style: /election/update?id=...
-    // But better: /election/{id}
     @PostMapping("/update")
     public ResponseEntity<String> updateElection(@RequestParam String id,
                                                  @Valid @RequestBody ElectionUpdateRequest request) {
@@ -57,7 +57,6 @@ public class AdminElectionController {
         electionAdminService.publishElectionResult(id);
         return ResponseEntity.ok().build();
     }
-
     @GetMapping("/ActiveElections/{orgId}")
     public ResponseEntity<List<ElectionModel>> getActiveElections(@PathVariable String orgId) {
         return ResponseEntity.ok(electionAdminService.getActiveElections(orgId));
@@ -97,5 +96,4 @@ public class AdminElectionController {
     public ResponseEntity<List<ElectionModel>> getAll(@PathVariable String orgId) {
         return ResponseEntity.ok(electionAdminService.getAllElections(orgId));
     }
-
 }

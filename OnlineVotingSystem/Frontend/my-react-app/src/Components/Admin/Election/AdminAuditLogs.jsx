@@ -198,6 +198,7 @@ export default function AdminAuditLogs() {
         }
 
         setDetail(res.data);
+        console.log(detail)
     }
 
     useEffect(() => {
@@ -494,7 +495,8 @@ export default function AdminAuditLogs() {
                                 {/* Useful summary grid */}
                                 <div className="grid grid-cols-1 gap-3">
                                     {smallKV("Created", fmtDate(detail.createdAt), CalendarClock)}
-                                    {monoKV("Audit ID", detail.id || selectedId, Fingerprint)}
+                                    {monoKV("Request ID", detail.requestId || selectedId, Fingerprint)}
+
                                 </div>
 
                                 {/* Actor card */}

@@ -1,66 +1,146 @@
 package com.example.demo.SpringBatch;
 
+import com.example.demo.DAO.AuditLogsRequest;
+import com.example.demo.Enums.ActionStatus;
+import com.example.demo.Enums.AuditActions;
 import com.example.demo.Models.VoterUploadStaging;
 import com.example.demo.Repositories.VoterUploadStagingRepo;
+import com.example.demo.Service.SafeAuditService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.springframework.batch.core.BatchStatus;
-import org.springframework.batch.core.JobExecution;
-import org.springframework.batch.core.JobExecutionListener;
-import org.springframework.batch.core.JobParameters;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.batch.core.*;
 import org.springframework.stereotype.Component;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
+import java.io.*;
 import java.util.List;
 import java.util.UUID;
+
+import static net.logstash.logback.argument.StructuredArguments.kv;
 
 @Component
 @RequiredArgsConstructor
 public class JobCompletionNotificationListener implements JobExecutionListener {
+
+    private static final Logger log = LoggerFactory.getLogger(JobCompletionNotificationListener.class);
+
     private final VoterUploadStagingRepo voterUploadStagingRepo;
+    private final SafeAuditService safeAuditService;
+
     @Override
-    public void beforeJob(JobExecution jobExecution) {}
+    public void beforeJob(JobExecution jobExecution) {
+        JobParameters p = jobExecution.getJobParameters();
+        String jobId = p.getString("jobId");
+        log.info("Batch job start {} {} {}",
+                kv("action", "UPLOAD_VOTERS"),
+                kv("phase", "JOB_START"),
+                kv("jobId", jobId != null ? jobId : jobExecution.getJobId())
+        );
+    }
+
     @Override
     @Transactional
     public void afterJob(JobExecution jobExecution) {
-        JobParameters jobParameters = jobExecution.getJobParameters();
-        UUID jobId = UUID.fromString(jobParameters.getString("jobId"));
-        if(jobExecution.getStatus()== BatchStatus.FAILED){
-            List<VoterUploadStaging> invalid = voterUploadStagingRepo.findInvalidRowsByJobId(jobId);
-            try {
-                File error = null;
-                try {
-                    error = File.createTempFile("VoterList errors "+ jobId,".csv");
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-                try(BufferedWriter writer = new BufferedWriter(new FileWriter(error))){
-                        writer.write("line,voterId,email,error\n");
-                        for(VoterUploadStaging voterUploadStaging:invalid){
-                            writer.write(String.format("%d,%s,%s,%s \n",
-                                        voterUploadStaging.getLineNumber()==null?-1:voterUploadStaging.getLineNumber(),
-                                        voterUploadStaging.getVoterId(),
-                                        voterUploadStaging.getEmail(),
-                                        voterUploadStaging.getErrorMessage()==null?" ":voterUploadStaging.getErrorMessage().replace(","," ")
-                                    ));
-                        }
-                    System.out.println("Errors written to: "+error.getAbsolutePath());
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                voterUploadStagingRepo.deleteAllByJobId(jobId);
-                System.out.println("Failed Job And Staging cleared for the job "+jobId);
-            }catch (Exception e){
-                e.printStackTrace();
-            }
+        JobParameters p = jobExecution.getJobParameters();
 
+        UUID jobId = UUID.fromString(p.getString("jobId"));
+        String electionId = p.getString("electionId");
+        String importerId = p.getString("importerId");
+
+        BatchStatus status = jobExecution.getStatus();
+        String exitCode = jobExecution.getExitStatus() != null ? jobExecution.getExitStatus().getExitCode() : null;
+
+        if (status == BatchStatus.FAILED) {
+            List<VoterUploadStaging> invalid = voterUploadStagingRepo.findInvalidRowsByJobId(jobId);
+
+            File errorFile = null;
+            try {
+                errorFile = File.createTempFile("voter_errors_" + jobId + "_", ".csv");
+
+                try (BufferedWriter writer = new BufferedWriter(new FileWriter(errorFile))) {
+                    writer.write("line,voterId,email,error\n");
+                    for (VoterUploadStaging row : invalid) {
+                        writer.write(String.format("%d,%s,%s,%s\n",
+                                row.getLineNumber() == null ? -1 : row.getLineNumber(),
+                                safe(row.getVoterId()),
+                                safe(row.getEmail()),
+                                safe(row.getErrorMessage()).replace(",", " ")
+                        ));
+                    }
+                }
+
+                log.warn("Batch job failed - error report generated {} {} {} {} {}",
+                        kv("action", "UPLOAD_VOTERS"),
+                        kv("phase", "JOB_FAILED"),
+                        kv("jobId", jobId.toString()),
+                        kv("exitCode", exitCode),
+                        kv("errorCount", invalid.size())
+                );
+                log.info("Batch error report path {} {}",
+                        kv("jobId", jobId.toString()),
+                        kv("errorFilePath", errorFile.getAbsolutePath())
+                );
+
+                safeAuditService.audit(AuditLogsRequest.builder()
+                        .actor(importerId)
+                        .electionId(electionId)
+                        .action(AuditActions.UPLOAD_VOTERS.name())
+                        .status(ActionStatus.FAILED.name())
+                        .entityId("UPLOAD")
+                        .details("Voter import FAILED. jobId=" + jobId + ", errors=" + invalid.size())
+                        .build());
+
+            } catch (IOException e) {
+                log.error("Batch job failed - could not write error report {} {}",
+                        kv("action", "UPLOAD_VOTERS"),
+                        kv("jobId", jobId.toString()),
+                        e
+                );
+
+                safeAuditService.audit(AuditLogsRequest.builder()
+                        .actor(importerId)
+                        .electionId(electionId)
+                        .action(AuditActions.UPLOAD_VOTERS.name())
+                        .status(ActionStatus.FAILED.name())
+                        .entityId("UPLOAD")
+                        .details("Voter import FAILED. jobId=" + jobId + " (error report write failed)")
+                        .build());
+            } finally {
+                voterUploadStagingRepo.deleteAllByJobId(jobId);
+                log.info("Batch staging cleared {} {}",
+                        kv("action", "UPLOAD_VOTERS"),
+                        kv("jobId", jobId.toString())
+                );
+            }
+            return;
         }
-        if (jobExecution.getStatus()==BatchStatus.COMPLETED){
-            System.out.println("Job and Staging Successfully Completed "+ jobId );
+
+        if (status == BatchStatus.COMPLETED) {
+            log.info("Batch job completed {} {} {}",
+                    kv("action", "UPLOAD_VOTERS"),
+                    kv("phase", "JOB_COMPLETED"),
+                    kv("jobId", jobId.toString())
+            );
+
+            safeAuditService.audit(AuditLogsRequest.builder()
+                    .actor(importerId)
+                    .electionId(electionId)
+                    .action(AuditActions.UPLOAD_VOTERS.name())
+                    .status(ActionStatus.SUCCESS.name())
+                    .entityId("UPLOAD")
+                    .details("Voter import COMPLETED. jobId=" + jobId)
+                    .build());
+
             voterUploadStagingRepo.deleteAllByJobId(jobId);
+            log.info("Batch staging cleared {} {}",
+                    kv("action", "UPLOAD_VOTERS"),
+                    kv("jobId", jobId.toString())
+            );
         }
+    }
+
+    private String safe(String s) {
+        return s == null ? "" : s;
     }
 }

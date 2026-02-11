@@ -13,14 +13,21 @@ import com.example.demo.ServiceInterface.CommitServiceInterface;
 import com.example.demo.ServiceInterface.UserInfoService;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
+import static net.logstash.logback.argument.StructuredArguments.kv;
+
 @Service
 @RequiredArgsConstructor
 public class VoteCommitService implements CommitServiceInterface {
+
+    private static final Logger log = LoggerFactory.getLogger(VoteCommitService.class);
 
     private final OneTimeTokenService tokenService;
     private final OneTimeTokenModelRepository tokenRepo;
@@ -29,7 +36,6 @@ public class VoteCommitService implements CommitServiceInterface {
     private final CandidateListRepository candidateRepo;
     private final VoterListModelRepository voterRepo;
     private final VoteSelectionRepository voteSelectionRepository;
-    private final HashService hashService;
     private final UserInfoService userInfoService;
     private final SafeAuditService safeAuditService;
     private final ReceiptService receiptService;
@@ -37,117 +43,197 @@ public class VoteCommitService implements CommitServiceInterface {
     @Override
     @Transactional
     public VoteReceiptResponse commitVote(VoteRequest req) {
-        UserModel user = userInfoService.getCurrentUser();
 
-        // ✅ idempotency (safe retry)
-        if (req.getRequestId() != null && !req.getRequestId().isBlank()) {
-            var existing = voteRepo.findByRequestId(req.getRequestId().trim());
+        UserModel user = userInfoService.getCurrentUser();
+        String mdcRequestId = normalize(MDC.get("requestId"));
+
+        // Prefer client requestId, fallback to MDC requestId
+        String requestId = normalize(req.getRequestId());
+        if (requestId == null) requestId = mdcRequestId;
+
+        UUID electionId = req.getElectionId();
+
+        // ✅ Idempotency: safe retry returns same receipt if requestId matches
+        if (requestId != null) {
+            var existing = voteRepo.findByRequestId(requestId);
             if (existing.isPresent()) {
                 VoteModel v = existing.get();
 
-                // Optional: audit idempotent replay (not required but useful)
-                safeAuditService.audit(AuditLogsRequest.builder()
-                        .actor(user.getId().toString())
-                        .electionId(v.getElectionId().getId().toString())
-                        .organizationId(user.getOrganization().getId().toString())
-                        .entityId(v.getId().toString())
-                        .action(AuditActions.VOTE_CAST.name())
-                        .status(ActionStatus.SUCCESS.name())
-                        .details("Idempotent replay: requestId reused, returning existing receipt")
-                        .createdAt(LocalDateTime.now())
-                        .build());
+                auditVote(user, v.getElectionId(), AuditActions.VOTE_CAST, ActionStatus.SUCCESS,
+                        "Idempotent replay: returning existing receipt");
 
-                return new VoteReceiptResponse(v.getElectionId().getId(), v.getReceiptHashToken(), v.getCreatedAt());
+                // Do NOT log receipt; return it
+                return new VoteReceiptResponse(
+                        v.getElectionId().getId(),
+                        v.getReceiptHashToken(),
+                        v.getCreatedAt()
+                );
             }
         }
 
-        ElectionModel election = electionRepo.findById(req.getElectionId())
-                .orElseThrow(() -> new NotFoundException("ELECTION_NOT_FOUND", "Election not found"));
+        ElectionModel election = electionRepo.findById(electionId)
+                .orElseThrow(() -> {
+                    log.warn("Vote cast failed: election not found {} {}",
+                            kv("action", "VOTE_CAST"),
+                            kv("electionId", electionId != null ? electionId.toString() : null)
+                    );
+                    // audit (for election admins)
+                    auditVote(user, null, AuditActions.VOTE_CAST, ActionStatus.FAILED, "Election not found");
+                    return new NotFoundException("ELECTION_NOT_FOUND", "Election not found");
+                });
 
         if (!election.getOrganization().getId().equals(user.getOrganization().getId())) {
-            safeAuditService.audit(failedAudit(user, election, "Cross-org vote attempt"));
+            log.warn("Vote cast blocked: cross-org {} {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "FAILED"),
+                    kv("electionId", election.getId().toString()),
+                    kv("userOrgId", user.getOrganization().getId().toString())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.FAILED, "Cross-org vote attempt");
             throw new ForbiddenException("CROSS_ORG_ACCESS", "Forbidden");
         }
 
         if (election.getStatus() != ElectionStatus.running) {
-            safeAuditService.audit(failedAudit(user, election, "Election not running: " + election.getStatus()));
+            log.warn("Vote cast rejected: election not running {} {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "REJECTED"),
+                    kv("electionId", election.getId().toString()),
+                    kv("currentStatus", election.getStatus().name())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.REJECTED,
+                    "Election not running: " + election.getStatus().name());
+
             throw new ConflictException("ELECTION_NOT_RUNNING", "Election is not running");
         }
 
+        // TokenId is sensitive: do NOT log it
         OneTokenModel token = tokenRepo.findByTokenId(req.getTokenId())
-                .orElseThrow(() -> new NotFoundException("TOKEN_NOT_FOUND", "Token not found"));
+                .orElseThrow(() -> {
+                    log.warn("Vote cast rejected: token not found {} {}",
+                            kv("action", "VOTE_CAST"),
+                            kv("status", "REJECTED")
+                    );
+                    auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.REJECTED, "Token not found");
+                    return new NotFoundException("TOKEN_NOT_FOUND", "Token not found");
+                });
 
-        if (!token.getElection().getId().equals(req.getElectionId())) {
-            safeAuditService.audit(failedAudit(user, election, "Token belongs to different election"));
+        if (!token.getElection().getId().equals(electionId)) {
+            log.warn("Vote cast blocked: token wrong election {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "FAILED"),
+                    kv("electionId", election.getId().toString())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.FAILED, "Token belongs to different election");
             throw new ForbiddenException("TOKEN_WRONG_ELECTION", "Token is not valid for this election");
         }
 
         if (token.getExpiresAt().isBefore(LocalDateTime.now())) {
-            safeAuditService.audit(failedAudit(user, election, "Token expired"));
+            log.warn("Vote cast rejected: token expired {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "REJECTED"),
+                    kv("electionId", election.getId().toString())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.REJECTED, "Token expired");
             throw new ConflictException("TOKEN_EXPIRED", "Token has expired");
         }
 
         if (token.isConsumed()) {
-            safeAuditService.audit(failedAudit(user, election, "Token already consumed"));
+            log.warn("Vote cast rejected: token already used {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "REJECTED"),
+                    kv("electionId", election.getId().toString())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.REJECTED, "Token already consumed");
             throw new ConflictException("TOKEN_ALREADY_USED", "Token already used");
         }
 
         VoterListModel voter = token.getVoter();
 
+        // Do not log email
         if (!voter.getEmail().equalsIgnoreCase(user.getEmail())) {
-            safeAuditService.audit(failedAudit(user, election, "Token not for authenticated user"));
+            log.warn("Vote cast blocked: token not for authenticated user {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "FAILED"),
+                    kv("electionId", election.getId().toString())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.FAILED, "Token not for authenticated user");
             throw new ForbiddenException("TOKEN_NOT_FOR_USER", "Token is not for this user");
         }
 
         if (voter.isBlocked()) {
-            safeAuditService.audit(failedAudit(user, election, "Voter blocked"));
+            log.warn("Vote cast blocked: voter blocked {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "FAILED"),
+                    kv("electionId", election.getId().toString())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.FAILED, "Voter blocked");
             throw new ForbiddenException("VOTER_BLOCKED", "You are blocked from voting");
         }
 
         if (voter.isHasVoted()) {
-            safeAuditService.audit(failedAudit(user, election, "Voter already voted"));
+            log.warn("Vote cast rejected: already voted {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "REJECTED"),
+                    kv("electionId", election.getId().toString())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.REJECTED, "Voter already voted");
             throw new ConflictException("ALREADY_VOTED", "You have already voted");
         }
 
-        // ✅ Validate selections: 1 per position + candidate belongs to election + optional position match
         if (req.getVotes() == null || req.getVotes().isEmpty()) {
-            safeAuditService.audit(failedAudit(user, election, "No votes provided"));
+            log.warn("Vote cast rejected: empty votes {} {} {}",
+                    kv("action", "VOTE_CAST"),
+                    kv("status", "REJECTED"),
+                    kv("electionId", election.getId().toString())
+            );
+
+            auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.REJECTED, "No votes provided");
             throw new BadRequestException("EMPTY_VOTES", "You must select at least one candidate");
         }
 
-        Set<String> seen = new HashSet<>();
+        // Validate selections (no logs per candidate)
+        Set<String> seenPositions = new HashSet<>();
         Map<UUID, CandidateListModel> candCache = new HashMap<>();
 
         for (var s : req.getVotes()) {
-            String pos = (s.getPosition() == null ? "" : s.getPosition().trim()).toLowerCase();
-            if (pos.isBlank()) throw new BadRequestException("POSITION_REQUIRED", "Position is required");
+            String pos = normalize(s.getPosition());
+            if (pos == null) throw new BadRequestException("POSITION_REQUIRED", "Position is required");
 
-            if (!seen.add(pos)) {
+            String key = pos.toLowerCase();
+            if (!seenPositions.add(key)) {
                 throw new BadRequestException("DUPLICATE_POSITION", "Duplicate position: " + s.getPosition());
             }
 
             CandidateListModel cand = candidateRepo.findById(s.getCandidateId())
                     .orElseThrow(() -> new NotFoundException("CANDIDATE_NOT_FOUND", "Candidate not found"));
 
-            if (!cand.getElectionId().getId().equals(req.getElectionId())) {
+            if (!cand.getElectionId().getId().equals(electionId)) {
                 throw new ConflictException("CANDIDATE_NOT_IN_ELECTION", "Candidate does not belong to this election");
             }
 
-            if (cand.getPosition() != null && !cand.getPosition().equalsIgnoreCase(s.getPosition().trim())) {
+            if (cand.getPosition() != null && !cand.getPosition().equalsIgnoreCase(pos)) {
                 throw new BadRequestException("POSITION_MISMATCH", "Candidate not in position: " + s.getPosition());
             }
 
             candCache.put(cand.getId(), cand);
         }
 
-        // ✅ Create ONE receipt for whole ballot
-        String receipt = receiptService.generateReceiptHash(req.getElectionId(), String.valueOf(UUID.randomUUID()));
+        // Receipt is sensitive: do NOT log it
+        String receipt = receiptService.generateReceiptHash(electionId, UUID.randomUUID().toString());
 
         VoteModel vote = new VoteModel();
         vote.setElectionId(election);
-        // vote.setVoter(voter); // recommended (enable when your entity includes voter relation)
         vote.setReceiptHashToken(receipt);
-        vote.setRequestId(req.getRequestId() == null ? null : req.getRequestId().trim());
+        vote.setRequestId(requestId);
+        vote.setCreatedAt(LocalDateTime.now());
         voteRepo.save(vote);
 
         for (var s : req.getVotes()) {
@@ -158,38 +244,41 @@ public class VoteCommitService implements CommitServiceInterface {
             voteSelectionRepository.save(vs);
         }
 
-        // ✅ Consume token + mark voted
         tokenService.consumeByTokenId(req.getTokenId());
 
         voter.setHasVoted(true);
         voter.setVotedAt(LocalDateTime.now());
         voterRepo.save(voter);
 
-        // ✅ SUCCESS audit (safe)
-        safeAuditService.audit(AuditLogsRequest.builder()
-                .actor(user.getId().toString())
-                .electionId(election.getId().toString())
-                .organizationId(election.getOrganization().getId().toString())
-                .entityId(vote.getId().toString())
-                .action(AuditActions.VOTE_CAST.name())
-                .status(ActionStatus.SUCCESS.name())
-                .details("Vote cast successfully. selections=" + req.getVotes().size())
-                .createdAt(LocalDateTime.now())
-                .build());
+        // ✅ audit SUCCESS for admins (don’t store selections list; count is fine)
+        auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.SUCCESS,
+                "Vote cast successfully. selections=" + req.getVotes().size());
 
-        return new VoteReceiptResponse(req.getElectionId(), receipt, vote.getCreatedAt());
+        return new VoteReceiptResponse(electionId, receipt, vote.getCreatedAt());
     }
 
-    private AuditLogsRequest failedAudit(UserModel user, ElectionModel election, String details) {
-        return AuditLogsRequest.builder()
-                .actor(user != null ? user.getId().toString() : null)
+    private void auditVote(UserModel actor,
+                           ElectionModel election,
+                           AuditActions action,
+                           ActionStatus status,
+                           String details) {
+
+        safeAuditService.audit(AuditLogsRequest.builder()
+                .actor(actor != null ? actor.getId().toString() : null)
                 .electionId(election != null ? election.getId().toString() : null)
-                .organizationId(user != null ? user.getOrganization().getId().toString() : null)
+                .organizationId(election != null ? election.getOrganization().getId().toString() : null)
+                .action(action.name())
+                .status(status.name())
                 .entityId("VoteModel")
-                .action(AuditActions.VOTE_CAST.name())
-                .status(ActionStatus.FAILED.name())
                 .details(details)
+                .requestId(MDC.get("requestId")) // ✅ bridge
                 .createdAt(LocalDateTime.now())
-                .build();
+                .build());
+    }
+
+    private String normalize(String s) {
+        if (s == null) return null;
+        String v = s.trim();
+        return v.isBlank() ? null : v;
     }
 }

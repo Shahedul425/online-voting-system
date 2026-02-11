@@ -1,7 +1,7 @@
 "use client";
 import { ShieldCheck, Vote, IdCard, CheckCircle2, HelpCircle, Clock } from "lucide-react";
 import {useNavigate} from "react-router-dom";
-import keycloak from "../../Service/Auth/Keycloak.js";
+// import keycloak from "../../Service/Auth/Keycloak.js";
 export default function Introduction() {
     // const handleLogin = () => {
     //     keycloak.login();

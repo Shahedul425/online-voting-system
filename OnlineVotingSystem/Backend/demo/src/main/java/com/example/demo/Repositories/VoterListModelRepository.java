@@ -38,4 +38,5 @@ public interface VoterListModelRepository extends JpaRepository<VoterListModel, 
             @Param("voterId") UUID voterId,
             @Param("votedAt") LocalDateTime votedAt
     );
+    long countByElection_IdAndHasVotedTrue(UUID electionId);
 }

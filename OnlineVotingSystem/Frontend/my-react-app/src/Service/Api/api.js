@@ -1,6 +1,6 @@
-import keycloak from "../Auth/Keycloak.js";
+// import keycloak from "../Auth/Keycloak.js";
 export const api = async (url)=>{
-    const token = keycloak.token;
+    const token = sessionStorage.getItem("access_token");
     const res = await fetch(`http://localhost:8080${url}`,{
         headers:{
             Authorization:`Bearer ${token}`

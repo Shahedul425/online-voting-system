@@ -1,15 +1,16 @@
 package com.example.demo.DAO;
 
 import lombok.Builder;
+import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
-@Getter
-@Setter
+
 @Builder
+@Data
 public class AuditLogsRequest {
 //    private String id;
     private String actor;
@@ -18,8 +19,8 @@ public class AuditLogsRequest {
 //    private String entityType;
     private String entityId;
     private String details;
-//    private String requestId;
-//    private String ipAddress;
+    private String requestId;
+    private String traceId;
     private LocalDateTime createdAt;
     private String organizationId;
     private String status;

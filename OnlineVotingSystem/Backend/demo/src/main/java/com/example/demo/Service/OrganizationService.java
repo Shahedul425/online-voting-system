@@ -15,14 +15,18 @@ import com.example.demo.ServiceInterface.OrganizationServiceInterface;
 import com.example.demo.Util.Ids;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+
+import static net.logstash.logback.argument.StructuredArguments.kv;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class OrganizationService implements OrganizationServiceInterface {
 
     private final OrganizationRepository organizationRepository;
@@ -41,7 +45,6 @@ public class OrganizationService implements OrganizationServiceInterface {
 
     @Override
     public String addOrganization(OrganizationRequest req) {
-        // super-admin actor optional
         UserModel actor = null;
         try { actor = userService.getCurrentUser(); } catch (Exception ignored) {}
 
@@ -60,32 +63,38 @@ public class OrganizationService implements OrganizationServiceInterface {
         try {
             OrganizationModel saved = organizationRepository.save(org);
 
+            // ✅ No INFO “created” log (noise). If you want a single superadmin milestone later,
+            // we can add one gated behind a feature flag, but per your request: keep Loki clean.
+
             auditService.audit(AuditLogsRequest.builder()
                     .actor(actor != null ? actor.getId().toString() : null)
                     .organizationId(saved.getId().toString())
-                    .electionId(null)
                     .action(AuditActions.CREATE_ORGANIZATION.name())
                     .status(ActionStatus.SUCCESS.name())
                     .entityId("OrganizationModel")
                     .details("Organization created")
-                    .createdAt(LocalDateTime.now())
                     .build());
 
             return "Organization added successfully";
+
         } catch (DataIntegrityViolationException e) {
-            // domain already taken globally
+            // ✅ Rejection => WARN
+            log.warn("Create org rejected: domain conflict {} {} {}",
+                    kv("action", "CREATE_ORGANIZATION"),
+                    kv("status", "REJECTED"),
+                    kv("domainCount", normalized != null ? normalized.size() : 0)
+            );
+
             auditService.audit(AuditLogsRequest.builder()
                     .actor(actor != null ? actor.getId().toString() : null)
-                    .organizationId(null)
-                    .electionId(null)
                     .action(AuditActions.CREATE_ORGANIZATION.name())
                     .status(ActionStatus.REJECTED.name())
                     .entityId("OrganizationModel")
                     .details("Organization create failed: domain already exists")
-                    .createdAt(LocalDateTime.now())
                     .build());
 
-            throw new ConflictException("DOMAIN_ALREADY_ASSIGNED", "One of the domains is already assigned to another organization");
+            throw new ConflictException("DOMAIN_ALREADY_ASSIGNED",
+                    "One of the domains is already assigned to another organization");
         }
     }
 
@@ -112,63 +121,92 @@ public class OrganizationService implements OrganizationServiceInterface {
     @Transactional
     public String assignOrgAdmin(String emailRaw, UUID orgId) {
         UserModel actor = userInfoService.getCurrentUser();
+
         if (actor.getRole() != Role.superadmin) {
+            // ✅ Security/authorization block => WARN
+            log.warn("Assign org admin blocked: not superadmin {} {} {}",
+                    kv("action", "ASSIGN_ORG_ADMIN"),
+                    kv("status", "FAILED"),
+                    kv("orgId", orgId.toString())
+            );
             throw new ForbiddenException("FORBIDDEN", "Only super admins can assign org admins");
         }
 
-        String email = emailRaw.trim().toLowerCase();
+        String email = (emailRaw == null) ? "" : emailRaw.trim().toLowerCase();
+        String domain = safeDomain(email);
 
         UserModel target = (UserModel) userModelRepository.findByEmailIgnoreCase(email)
-                .orElseThrow(() -> new NotFoundException("USER_NOT_FOUND", "No user with this email"));
+                .orElseThrow(() -> {
+                    // ✅ Failure => WARN, no raw email
+                    log.warn("Assign org admin failed: user not found {} {} {}",
+                            kv("action", "ASSIGN_ORG_ADMIN"),
+                            kv("status", "FAILED"),
+                            kv("domain", domain)
+                    );
+                    return new NotFoundException("USER_NOT_FOUND", "No user with this email");
+                });
 
-        String domain = userInfoService.extractDomain(email);
-
-        // Derive org by domain (authoritative)
         OrganizationModel orgByDomain = organizationRepository.findByDomain(domain)
-                .orElseThrow(() -> new BadRequestException(
-                        "ORG_NOT_ALLOWED",
-                        "Email domain is not registered to any organization"
-                ));
+                .orElseThrow(() -> {
+                    // ✅ Rejection => WARN
+                    log.warn("Assign org admin rejected: domain not registered {} {} {}",
+                            kv("action", "ASSIGN_ORG_ADMIN"),
+                            kv("status", "REJECTED"),
+                            kv("domain", domain)
+                    );
+                    return new BadRequestException("ORG_NOT_ALLOWED",
+                            "Email domain is not registered to any organization");
+                });
 
-        // Enforce the requested org matches the domain-derived org
         if (!orgByDomain.getId().equals(orgId)) {
-            throw new BadRequestException(
-                    "DOMAIN_MISMATCH",
-                    "This email belongs to a different organization"
+            log.warn("Assign org admin rejected: org mismatch {} {} {} {}",
+                    kv("action", "ASSIGN_ORG_ADMIN"),
+                    kv("status", "REJECTED"),
+                    kv("domain", domain),
+                    kv("requestedOrgId", orgId.toString())
             );
+            throw new BadRequestException("DOMAIN_MISMATCH", "This email belongs to a different organization");
         }
 
-        // Optional extra safety if you keep allowedDomains list
         if (orgByDomain.getAllowedDomains() != null &&
                 !orgByDomain.getAllowedDomains().contains(domain)) {
-            throw new BadRequestException(
-                    "DOMAIN_MISMATCH",
-                    "User email domain not allowed for this org"
+            log.warn("Assign org admin rejected: domain not allowed {} {} {}",
+                    kv("action", "ASSIGN_ORG_ADMIN"),
+                    kv("status", "REJECTED"),
+                    kv("domain", domain)
             );
+            throw new BadRequestException("DOMAIN_MISMATCH", "User email domain not allowed for this org");
         }
 
-        // Update DB
+        // DB updates
         target.setRole(Role.admin);
         target.setOrganization(orgByDomain);
         userModelRepository.save(target);
 
-        // Update Keycloak
+        // Keycloak updates
         registerService.grantRealmRole(target.getKeycloakId(), "admin");
-        registerService.revokeRealmRole(target.getKeycloakId(),"voter");
-        // Audit
+        registerService.revokeRealmRole(target.getKeycloakId(), "voter");
+
+        // ✅ No INFO “success” log (noise) per your rule.
+        // If something fails here, your exception handler + RequestTimingFilter will log it.
+
         auditService.audit(AuditLogsRequest.builder()
                 .actor(actor.getId().toString())
                 .action(AuditActions.ASSIGN_ORG_ADMIN.name())
                 .entityId(target.getId().toString())
                 .status(ActionStatus.SUCCESS.name())
                 .organizationId(orgByDomain.getId().toString())
-                .electionId(null)
-                .createdAt(LocalDateTime.now())
-                .details("Assigned org admin to " + email)
+                .details("Assigned org admin (domain=" + domain + ")")
                 .build());
+
         return "Organization admin added successfully";
     }
 
-
-
+    private String safeDomain(String email) {
+        try {
+            return userInfoService.extractDomain(email);
+        } catch (Exception e) {
+            return "unknown";
+        }
+    }
 }

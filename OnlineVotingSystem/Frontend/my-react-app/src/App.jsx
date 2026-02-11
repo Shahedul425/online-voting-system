@@ -22,6 +22,8 @@ import OrganizationsHome from "./Components/SuperAdmin/Organization/OrgHome.jsx"
 import AdminElectionsByStatus from "./Components/Admin/Election/AdminElectionsByStatus.jsx";
 import AdminElectionWorkspace from "./Components/Admin/Election/AdminElectionWorkSpace.jsx";
 import AdminUpdateElection from "./Components/Admin/Election/AdminUpdateElection.jsx";
+import VerifyReceipt from "./Components/ReceiptVerification/ReceiptVerification.jsx";
+import AdminElectionResults from "./Components/Admin/Election/AdminElectionResults.jsx";
 
 function App() {
     return (
@@ -32,6 +34,8 @@ function App() {
                 {/* Public */}
                 <Route path="/signin" element={<SignIn />} />
                 <Route path="/signup" element={<SignUp />} />
+                <Route path="/verify/receipt" element={<VerifyReceipt />} />
+
 
                 {/* Voter Pages */}
                 <Route path="/select" element={
@@ -118,6 +122,15 @@ function App() {
                         <AdminCandidateList />
                     </ProtectedRoute>
                 } />
+                {/*ElectionResult*/}
+                <Route
+                    path="/admin/elections/:electionId/results"
+                    element={
+                        <ProtectedRoute roles={["admin"]}>
+                            <AdminElectionResults />
+                        </ProtectedRoute>
+                    }
+                />
                 <Route path="/superAdmin" element={
                     <ProtectedRoute roles={["superadmin"]}>
                         <SuperAdminPanel />

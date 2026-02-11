@@ -34,7 +34,14 @@ export default function OrgCreate() {
 
         setLoading(true);
         try {
-            const data = await withUnwrap(OVS.createOrganization(form));
+            const payload = {
+                name: form.name,
+                type: form.type,
+                country: form.country,
+                allowedDomains: [form.domain].filter(Boolean), // <-- key fix
+            };
+
+            const data = await withUnwrap(OVS.createOrganization(payload));
             // your backend returns String message
             setSuccessMsg(typeof data === "string" ? data : "Organization created.");
             setForm({ name: "", type: "", country: "", domain: "" });
