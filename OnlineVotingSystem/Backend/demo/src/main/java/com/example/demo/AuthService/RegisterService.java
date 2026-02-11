@@ -1,17 +1,15 @@
 package com.example.demo.AuthService;
 
 import com.example.demo.DAO.RegisterRequest;
-import com.example.demo.DAO.UserRequest;
 import com.example.demo.Enums.Role;
 import com.example.demo.Exception.ConflictException;
-import com.example.demo.Exception.KeycloakEmailAlreadyExistsException;
 import com.example.demo.Exception.NotFoundException;
 import com.example.demo.Models.OrganizationModel;
 import com.example.demo.Models.UserModel;
 import com.example.demo.Repositories.OrganizationRepository;
 import com.example.demo.Repositories.UserModelRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.web.client.RestTemplateBuilder;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -21,8 +19,11 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 
+import static net.logstash.logback.argument.StructuredArguments.kv;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class RegisterService {
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -35,19 +36,28 @@ public class RegisterService {
     private final String adminClientId = "admin-cli";
 
     public void register(RegisterRequest req) {
-
         String email = req.email().trim().toLowerCase();
         String domain = extractDomain(email);
 
         // 1) org domain must exist
         OrganizationModel org = organizationRepository.findByDomain(domain)
-                .orElseThrow(() -> new NotFoundException(
-                        "ORGANIZATION_NOT_FOUND",
-                        "No organization found for email domain: " + domain
-                ));
+                .orElseThrow(() -> {
+                    log.warn("Registration blocked: org not found {} {} {}",
+                            kv("action", "USER_REGISTRATION"),
+                            kv("status", "FAILED"),
+                            kv("domain", domain)
+                    );
+                    return new NotFoundException("ORGANIZATION_NOT_FOUND",
+                            "No organization found for email domain: " + domain);
+                });
 
         // 2) prevent duplicates in your DB (fast check)
         if (userModelRepository.findByEmailIgnoreCase(email).isPresent()) {
+            log.warn("Registration rejected: user already exists {} {} {}",
+                    kv("action", "USER_REGISTRATION"),
+                    kv("status", "REJECTED"),
+                    kv("username", safeUser(email))
+            );
             throw new ConflictException("USER_ALREADY_EXISTS", "User already exists with this email");
         }
 
@@ -66,9 +76,18 @@ public class RegisterService {
 
             userModelRepository.save(user);
 
+            // Success: no INFO here (avoid noise). RequestTimingFilter already logs request completion.
         } catch (Exception dbEx) {
             // 5) rollback KC user best-effort (avoid orphan KC account)
             tryDeleteKeycloakUser(keycloakId, adminToken);
+
+            log.error("Registration failed: DB create failed (rolled back keycloak) {} {} {}",
+                    kv("action", "USER_REGISTRATION"),
+                    kv("status", "FAILED"),
+                    kv("username", safeUser(email)),
+                    dbEx
+            );
+
             throw new ConflictException("USER_CREATE_FAILED", "Could not create user in application database");
         }
     }
@@ -79,7 +98,7 @@ public class RegisterService {
         headers.setBearerAuth(adminToken);
 
         Map<String, Object> user = Map.of(
-                "username", email,           // use email as username
+                "username", email,
                 "email", email,
                 "firstName", req.firstName(),
                 "lastName", req.lastName(),
@@ -102,13 +121,31 @@ public class RegisterService {
             );
         } catch (HttpClientErrorException e) {
             if (e.getStatusCode() == HttpStatus.CONFLICT) {
+                log.warn("Registration rejected: email exists in keycloak {} {} {}",
+                        kv("action", "USER_REGISTRATION"),
+                        kv("status", "REJECTED"),
+                        kv("username", safeUser(email))
+                );
                 throw new ConflictException("EMAIL_EXISTS", "Email already exists");
             }
+
+            log.error("Registration failed: keycloak create error {} {} {} {}",
+                    kv("action", "USER_REGISTRATION"),
+                    kv("status", "FAILED"),
+                    kv("username", safeUser(email)),
+                    kv("kcStatus", e.getStatusCode().value()),
+                    e
+            );
             throw e;
         }
 
         String location = response.getHeaders().getFirst("Location");
         if (location == null || !location.contains("/")) {
+            log.error("Registration failed: keycloak missing Location header {} {} {}",
+                    kv("action", "USER_REGISTRATION"),
+                    kv("status", "FAILED"),
+                    kv("username", safeUser(email))
+            );
             throw new ConflictException("KEYCLOAK_CREATE_FAILED", "Keycloak did not return user id");
         }
 
@@ -135,7 +172,15 @@ public class RegisterService {
         Map<String, Object> response =
                 restTemplate.postForObject(url, new HttpEntity<>(form, headers), Map.class);
 
-        return Objects.requireNonNull(response).get("access_token").toString();
+        if (response == null || response.get("access_token") == null) {
+            log.error("Keycloak admin token fetch failed {} {}",
+                    kv("action", "KEYCLOAK_ADMIN_TOKEN"),
+                    kv("status", "FAILED")
+            );
+            throw new ConflictException("KEYCLOAK_ADMIN_TOKEN_FAILED", "Could not fetch Keycloak admin token");
+        }
+
+        return response.get("access_token").toString();
     }
 
     private void assignRole(String userId, String role, String token) {
@@ -149,6 +194,15 @@ public class RegisterService {
                 new HttpEntity<>(headers),
                 Map.class
         ).getBody();
+
+        if (roleObj == null) {
+            log.error("Keycloak role fetch failed {} {} {}",
+                    kv("action", "KEYCLOAK_ROLE_ASSIGN"),
+                    kv("status", "FAILED"),
+                    kv("role", role)
+            );
+            throw new ConflictException("ROLE_NOT_FOUND", "Keycloak role not found: " + role);
+        }
 
         restTemplate.exchange(
                 keycloakUrl + "/admin/realms/" + realm + "/users/" + userId + "/role-mappings/realm",
@@ -173,6 +227,7 @@ public class RegisterService {
             // best-effort only
         }
     }
+
     // ===== Expose role operations for other services (SuperAdmin etc.) =====
 
     public void grantRealmRole(String keycloakUserId, String roleName) {
@@ -210,12 +265,22 @@ public class RegisterService {
         );
     }
 
-
     private String extractDomain(String email) {
         int at = email.lastIndexOf("@");
         if (at < 0 || at == email.length() - 1) {
+            log.warn("Registration rejected: invalid email {} {}",
+                    kv("action", "USER_REGISTRATION"),
+                    kv("status", "REJECTED")
+            );
             throw new ConflictException("INVALID_EMAIL", "Invalid email");
         }
         return email.substring(at + 1).toLowerCase();
+    }
+
+    private String safeUser(String email) {
+        if (email == null) return "null";
+        int at = email.indexOf('@');
+        if (at > 1) return email.charAt(0) + "***" + email.substring(at);
+        return "***";
     }
 }

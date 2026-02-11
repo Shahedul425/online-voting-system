@@ -34,7 +34,11 @@ public class AuditLogsModel {
 //    private String entityType;
     private String entityId;
     private String details;
-//    private String requestId;
+    @Column(length = 64)
+    private String requestId;
+
+    @Column(length = 64)
+    private String traceId;
     @Enumerated(EnumType.STRING)
     @NotNull
     @Column(nullable = false)

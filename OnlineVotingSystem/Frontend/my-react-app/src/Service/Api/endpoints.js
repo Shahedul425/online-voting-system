@@ -64,6 +64,16 @@ export const OVS = {
     auditSearch: (payload) => api.post("/audit/search", { json: payload }),
     auditGetOne: ({ electionId, auditId }) => api.get(`/audit/${electionId}/${auditId}`, {}),
 
+    // MerkleTree receipt verification
+    // ✅ add this to src/api/endpoints.js
+    verifyReceipt: ({ receiptToken }) =>
+        api.post("/public/receipt/verify", {
+            requiresAuth: false,
+            json: { receiptToken },
+        }),
+    // Election Results
+    getAdminElectionResults: ({ electionId }) =>
+        api.get(`/admin/election/results/${electionId}`, {}),
     // superadmin org mgmt (ONLY endpoints you currently have)
     createOrganization: (payload) => api.post("/superadmin/org/create", { json: payload }),
     assignOrgAdmin: ({ email, orgId }) =>

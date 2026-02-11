@@ -15,6 +15,7 @@ import com.example.demo.Repositories.UserModelRepository;
 import com.example.demo.ServiceInterface.AuditFactoryInterface;
 import com.example.demo.Util.Ids;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -59,6 +60,11 @@ public class AuditFactoryService implements AuditFactoryInterface {
             org = election.getOrganization();
         }
 
+        String requestId = firstNonBlank(req.getRequestId(), MDC.get("requestId"));
+        String traceId   = firstNonBlank(req.getTraceId(), MDC.get("traceId"));
+
+        model.setRequestId(requestId);
+        model.setTraceId(traceId);
         model.setActor(actor);
         model.setOrganization(org);
         model.setElection(election);
@@ -71,6 +77,11 @@ public class AuditFactoryService implements AuditFactoryInterface {
         logsRepository.save(model);
     }
 
+    private String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) return a;
+        if (b != null && !b.isBlank()) return b;
+        return null;
+    }
     private <E extends Enum<E>> E safeEnum(Class<E> type, String raw, String field) {
         if (raw == null || raw.isBlank()) {
             throw new BadRequestException("MISSING_FIELD", field + " is required");

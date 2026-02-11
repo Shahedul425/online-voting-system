@@ -1,0 +1,76 @@
+<configuration>
+
+    <springProperty scope="context" name="APP_NAME" source="spring.application.name" defaultValue="demo"/>
+    <springProperty scope="context" name="LOKI_URL" source="loki.url" defaultValue="http://localhost:3100/loki/api/v1/push"/>
+
+    <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+        <http>
+            <url>${LOKI_URL}</url>
+        </http>
+
+        <format>
+            <label>
+                <pattern>app=${APP_NAME},host=${HOSTNAME}</pattern>
+            </label>
+
+            <!-- ✅ one-line valid JSON (perfect for Grafana table via | json) -->
+            <message>
+                <pattern><![CDATA[
+                {"ts":"%date{ISO8601}","app":"${APP_NAME}","level":"%level","logger":"%logger{36}","thread":"%thread",
+                "traceId":"%X{trace_id:-}","spanId":"%X{span_id:-}",
+                "requestId":"%X{requestId:-}","service":"%X{service:-${APP_NAME}}","component":"%X{component:-}",
+                "method":"%X{method:-}","path":"%X{path:-}","status":"%X{status:-}","duration_ms":"%X{duration_ms:-}",
+                "what_happened":"%X{what_happened:-}","error_reason":"%X{error_reason:-}","error_code":"%X{error_code:-}",
+                "message":"%replace(%msg){'\n','\\n'}","exception_class":"%X{exception_class:-}","root_cause":"%X{root_cause:-}"}
+                  ]]></pattern>
+            </message>
+
+
+
+
+            <sortByTime>true</sortByTime>
+        </format>
+    </appender>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level %logger - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+        <appender-ref ref="LOKI"/>
+    </root>
+
+</configuration>
+
+
+<!--<message>-->
+<!--<pattern>-->
+<!--    {-->
+<!--    "ts":"%date{ISO8601}",-->
+<!--    "app":"${APP_NAME}",-->
+<!--    "level":"%level",-->
+<!--    "logger":"%logger{36}",-->
+<!--    "thread":"%thread",-->
+<!--    "traceId":"%X{traceId:-%X{trace_id:-}}",-->
+<!--    "spanId":"%X{spanId:-%X{span_id:-}}",-->
+
+<!--    &lt;!&ndash;                    "spanId":"%X{spanId:-%X{span_id:-}}",&ndash;&gt;-->
+<!--    "requestId":"%X{requestId:-}",-->
+<!--    "service":"%X{service:-${APP_NAME}}",-->
+<!--    "component":"%X{component:-}",-->
+<!--    "method":"%X{method:-}",-->
+<!--    "path":"%X{path:-}",-->
+<!--    "status":"%X{status:-}",-->
+<!--    "duration_ms":"%X{duration_ms:-}",-->
+<!--    "what_happened":"%X{what_happened:-}",-->
+<!--    "error_reason":"%X{error_reason:-}",-->
+<!--    "error_code":"%X{error_code:-}",-->
+<!--    "message":"%replace(%msg){'\n','\\n'}",-->
+<!--    "exception_class":"%X{exception_class:-}",-->
+<!--    "root_cause":"%X{root_cause:-}"-->
+<!--    }-->
+<!--</pattern>-->
+<!--</message>-->

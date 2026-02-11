@@ -18,7 +18,7 @@ import {
     Loader2,
     RefreshCcw,
     CalendarClock,
-    ShieldCheck,
+    ShieldCheck, BarChart3,
 } from "lucide-react";
 
 import { OVS } from "../../../Service/Api/endpoints";
@@ -82,6 +82,7 @@ function timeHint(e) {
 export default function AdminElectionWorkspace() {
     const navigate = useNavigate();
     const { electionId } = useParams();
+
 
     const me = useAppStore((s) => s.me);
     const adminElection = useAppStore((s) => s.election);
@@ -201,6 +202,7 @@ export default function AdminElectionWorkspace() {
         audit: () => navigate(`/admin/elections/${electionId}/audit`),
         uploadVoters: () => navigate(`/admin/elections/${electionId}/uploads/voters`),
         uploadCandidates: () => navigate(`/admin/elections/${electionId}/uploads/candidates`),
+        results: () => navigate(`/admin/elections/${electionId}/results`),
     };
 
     // If you don't have an "update" page yet, the Update button still helps: you can wire it later.
@@ -368,6 +370,17 @@ export default function AdminElectionWorkspace() {
                                 disabledReason="Election not loaded."
                                 onClick={go.candidates}
                             />
+                        {/*    Results*/}
+                            <ActionCard
+                                icon={<BarChart3 className="h-5 w-5" />}
+                                title="Results / Summary"
+                                subtitle={status === "published" ? "View winners, rankings, turnout, and Merkle commitment." : "Available after publish."}
+                                tone={status === "published" ? "neutral" : "disabled"}
+                                disabled={status !== "published"}
+                                disabledReason="Results available only after publish."
+                                onClick={go.results}
+                            />
+
                         </div>
 
                         {/* Lifecycle */}

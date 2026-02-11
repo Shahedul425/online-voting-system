@@ -62,7 +62,7 @@ export default function SuperAdminPanel() {
                         title="Organizations"
                         desc="Create organizations and manage domains."
                         icon={Building2}
-                        onClick={() => navigate("/superadmin/orgs")}
+                        onClick={() => navigate("/superadmin/orgs/create")}
                     />
 
                     <Card
