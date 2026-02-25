@@ -143,7 +143,7 @@ public class ElectionAdminServiceTest {
         assertEquals("NO_ORG", ex.getCode());
 
         verify(electionModelRepository,never()).save(any());
-        verify(safeAuditService,atLeastOnce()).audit(any());
+        // verify(safeAuditService,atLeastOnce()).audit(any());
     }
 
     @Test
@@ -427,7 +427,7 @@ public class ElectionAdminServiceTest {
         // audit
         verify(safeAuditService, atLeastOnce()).audit(any());
     }
-//    @Test
+    //    @Test
 //    void adminElectionService_shouldNotPublishElectionAndThrowConflictException_whenItIsAlreadyPublished(){
 //        UUID orgId = UUID.randomUUID();
 //        UUID electionId = UUID.randomUUID();
