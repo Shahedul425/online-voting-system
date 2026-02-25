@@ -427,7 +427,7 @@ public class ElectionAdminServiceTest {
         // audit
         verify(safeAuditService, atLeastOnce()).audit(any());
     }
-//    @Test
+    //    @Test
 //    void adminElectionService_shouldNotPublishElectionAndThrowConflictException_whenItIsAlreadyPublished(){
 //        UUID orgId = UUID.randomUUID();
 //        UUID electionId = UUID.randomUUID();

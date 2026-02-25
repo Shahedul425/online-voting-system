@@ -89,13 +89,13 @@ public class AdminUploadServiceTest {
 
     @Test
     public void adminUploadService_shouldFailAndThrowNotFoundException_whenElectionNotFound() throws Exception{
-         UUID electionId = UUID.randomUUID();
-         UUID orgId = UUID.randomUUID();
-         UserModel user = userWithOrg(orgId);
-         when(userInfoService.getCurrentUser()).thenReturn(user);
+        UUID electionId = UUID.randomUUID();
+        UUID orgId = UUID.randomUUID();
+        UserModel user = userWithOrg(orgId);
+        when(userInfoService.getCurrentUser()).thenReturn(user);
 
-         var election = electionModel(electionId,orgId,ElectionStatus.draft);
-         when(electionModelRepository.findById(electionId)).thenReturn(Optional.empty());
+        var election = electionModel(electionId,orgId,ElectionStatus.draft);
+        when(electionModelRepository.findById(electionId)).thenReturn(Optional.empty());
 
         NotFoundException ex = assertThrows(NotFoundException.class,()->adminUploadService.importVoterList(csvFile("name"),electionId,"voterId","email"));
         assertEquals("ELECTION_NOT_FOUND",ex.getCode());
@@ -211,35 +211,35 @@ public class AdminUploadServiceTest {
     var user = userWithOrg(orgId);
     when(userInfoService.getCurrentUser()).thenReturn(user);
 
-    var election = electionModel(electionId, orgId, ElectionStatus.draft);
-    when(electionModelRepository.findById(electionId)).thenReturn(Optional.of(election));
+        var election = electionModel(electionId, orgId, ElectionStatus.draft);
+        when(electionModelRepository.findById(electionId)).thenReturn(Optional.of(election));
 
-    JobExecution exec = mock(JobExecution.class);
-    when(exec.getStatus()).thenReturn(BatchStatus.STARTED);
+        JobExecution exec = mock(JobExecution.class);
+        when(exec.getStatus()).thenReturn(BatchStatus.STARTED);
 
-    // FIXED HERE
-    when(jobLauncher.run(any(), any())).thenReturn(exec);
+        // FIXED HERE
+        when(jobLauncher.run(any(), any())).thenReturn(exec);
 
-    ImportReport out = adminUploadService.importVoterList(
-            csvFile("name.csv"), electionId, "voterId", "email"
-    );
+        ImportReport out = adminUploadService.importVoterList(
+                csvFile("name.csv"), electionId, "voterId", "email"
+        );
 
-    assertNotNull(out);
-    assertEquals("STARTED", out.getStatus());
-    assertNotNull(out.getJobId());
-    assertNotNull(out.getErrorFilePath());
+        assertNotNull(out);
+        assertEquals("STARTED", out.getStatus());
+        assertNotNull(out.getJobId());
+        assertNotNull(out.getErrorFilePath());
 
-    ArgumentCaptor<JobParameters> argument = ArgumentCaptor.forClass(JobParameters.class);
-    verify(jobLauncher).run(any(), argument.capture());
+        ArgumentCaptor<JobParameters> argument = ArgumentCaptor.forClass(JobParameters.class);
+        verify(jobLauncher).run(any(), argument.capture());
 
-    JobParameters params = argument.getValue();
-    assertEquals(electionId.toString(), params.getString("electionId"));
-    assertEquals("voterId", params.getString("voterIdColumn"));
-    assertEquals("email", params.getString("emailColumn"));
-    assertNotNull(params.getString("filePath"));
+        JobParameters params = argument.getValue();
+        assertEquals(electionId.toString(), params.getString("electionId"));
+        assertEquals("voterId", params.getString("voterIdColumn"));
+        assertEquals("email", params.getString("emailColumn"));
+        assertNotNull(params.getString("filePath"));
 
-    verify(safeAuditService, atLeastOnce()).audit(any());
-}
+        verify(safeAuditService, atLeastOnce()).audit(any());
+    }
 
 
 
