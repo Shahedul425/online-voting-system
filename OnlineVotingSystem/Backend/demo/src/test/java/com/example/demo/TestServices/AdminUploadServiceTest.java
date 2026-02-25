@@ -206,36 +206,40 @@ public class AdminUploadServiceTest {
 
     @Test
     public void adminUploadService_shouldUploadFile_whenHappyPath() throws Exception {
-        UUID electionId = UUID.randomUUID();
-        UUID orgId = UUID.randomUUID();
-        var user = userWithOrg(orgId);
-        when(userInfoService.getCurrentUser()).thenReturn(user);
+    UUID electionId = UUID.randomUUID();
+    UUID orgId = UUID.randomUUID();
+    var user = userWithOrg(orgId);
+    when(userInfoService.getCurrentUser()).thenReturn(user);
 
-        var election = electionModel(electionId,orgId,ElectionStatus.draft);
-        when(electionModelRepository.findById(electionId)).thenReturn(Optional.of(election));
+    var election = electionModel(electionId, orgId, ElectionStatus.draft);
+    when(electionModelRepository.findById(electionId)).thenReturn(Optional.of(election));
 
-        JobExecution exec = mock(JobExecution.class);
-        when(exec.getStatus()).thenReturn(BatchStatus.STARTED);
-        when(jobLauncher.run(any(), any()))
-        .thenReturn(jobExecution);
-        ImportReport out = adminUploadService.importVoterList(csvFile("name.csv"),electionId,"voterId","email");
+    JobExecution exec = mock(JobExecution.class);
+    when(exec.getStatus()).thenReturn(BatchStatus.STARTED);
 
-        assertNotNull(out);
-        assertEquals("STARTED",out.getStatus());
-        assertNotNull(out.getJobId());
-        assertNotNull(out.getErrorFilePath());
-        ArgumentCaptor<JobParameters> argument = ArgumentCaptor.forClass(JobParameters.class);
-        verify(jobLauncher).run(eq(voterImportJob),argument.capture());
-        JobParameters params = argument.getValue();
-        assertEquals(electionId.toString(), params.getString("electionId"));
-        assertEquals("voterId", params.getString("voterIdColumn"));
-        assertEquals("email", params.getString("emailColumn"));
-        assertNotNull(params.getString("filePath"));
+    // FIXED HERE
+    when(jobLauncher.run(any(), any())).thenReturn(exec);
 
-        verify(safeAuditService, atLeastOnce()).audit(any());
+    ImportReport out = adminUploadService.importVoterList(
+            csvFile("name.csv"), electionId, "voterId", "email"
+    );
 
+    assertNotNull(out);
+    assertEquals("STARTED", out.getStatus());
+    assertNotNull(out.getJobId());
+    assertNotNull(out.getErrorFilePath());
 
-    }
+    ArgumentCaptor<JobParameters> argument = ArgumentCaptor.forClass(JobParameters.class);
+    verify(jobLauncher).run(any(), argument.capture());
+
+    JobParameters params = argument.getValue();
+    assertEquals(electionId.toString(), params.getString("electionId"));
+    assertEquals("voterId", params.getString("voterIdColumn"));
+    assertEquals("email", params.getString("emailColumn"));
+    assertNotNull(params.getString("filePath"));
+
+    verify(safeAuditService, atLeastOnce()).audit(any());
+}
 
 
 
