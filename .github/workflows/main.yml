@@ -18,9 +18,7 @@ jobs:
           java-version: 21
 
       - name: Unit Tests
-        working-directory: Backend/demo
-        run: mvn -B test
+        run: mvn -B test --file Backend/demo/pom.xml
 
       - name: Build the application
-        working-directory: Backend/demo
-        run: mvn -B clean package     
+        run: mvn -B clean package --file Backend/demo/pom.xml   
