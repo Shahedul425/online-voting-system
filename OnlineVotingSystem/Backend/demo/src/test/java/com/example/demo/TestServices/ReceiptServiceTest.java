@@ -139,15 +139,14 @@ class ReceiptServiceTest {
         String[] parts = token.split("\\.");
         assertEquals(2, parts.length);
 
-        // tamper signature by flipping last char (keeping base64url-ish)
-        String sig = parts[1];
-        char last = sig.charAt(sig.length() - 1);
-        char flipped = (last == 'A') ? 'B' : 'A';
-        String tampered = parts[0] + "." + sig.substring(0, sig.length() - 1) + flipped;
+        // tamper payload instead of signature
+        String payload = parts[0];
+        String tamperedPayload = payload.substring(0, payload.length() - 1) + "A";
+
+        String tampered = tamperedPayload + "." + parts[1];
 
         assertThrows(NotFoundException.class, () -> svc.verifyAndDecode(tampered));
     }
-
     @Test
     void verifyAndDecode_throwsBadRequest_whenSignaturePartNotBase64() {
         ReceiptService svc = serviceWithRealMapper();
