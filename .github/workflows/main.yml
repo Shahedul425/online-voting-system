@@ -18,7 +18,7 @@ jobs:
           java-version: 21
 
       - name: Unit Tests
-        run: mvn -B test --file Backend/demo/pom.xml
+        run: mvn -B test --file OnlineVotingSystem/Backend/demo/pom.xml
 
       - name: Build the application
-        run: mvn -B clean package --file Backend/demo/pom.xml   
+        run: mvn -B clean package --file OnlineVotingSystem/Backend/demo/pom.xml   
