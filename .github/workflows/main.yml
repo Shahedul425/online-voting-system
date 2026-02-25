@@ -3,12 +3,13 @@ name: Build & Deploy OnlineVotingSystem
 on:
   push:
     branches:
-      -main
+      - main
 
 jobs:
   build-deploy:
     name: Build & Deploy Spring boot for beginner
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,11 +19,10 @@ jobs:
         with:
           distribution: 'corretto'
           java-version: 21
+
       - name: Unit Tests
         run: mvn -B test --file pom.xml
 
       - name: Build the application
-        run: |
-          mvn clean
-          mvn -B package -file pom.xml
+        run: mvn -B clean package --file pom.xml
           
