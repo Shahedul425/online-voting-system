@@ -206,10 +206,10 @@ public class AdminUploadServiceTest {
 
     @Test
     public void adminUploadService_shouldUploadFile_whenHappyPath() throws Exception {
-        UUID electionId = UUID.randomUUID();
-        UUID orgId = UUID.randomUUID();
-        var user = userWithOrg(orgId);
-        when(userInfoService.getCurrentUser()).thenReturn(user);
+    UUID electionId = UUID.randomUUID();
+    UUID orgId = UUID.randomUUID();
+    var user = userWithOrg(orgId);
+    when(userInfoService.getCurrentUser()).thenReturn(user);
 
         var election = electionModel(electionId, orgId, ElectionStatus.draft);
         when(electionModelRepository.findById(electionId)).thenReturn(Optional.of(election));
