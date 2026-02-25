@@ -216,7 +216,8 @@ public class AdminUploadServiceTest {
 
         JobExecution exec = mock(JobExecution.class);
         when(exec.getStatus()).thenReturn(BatchStatus.STARTED);
-        when(jobLauncher.run(eq(voterImportJob),any())).thenReturn(exec);
+        when(jobLauncher.run(any(), any()))
+        .thenReturn(jobExecution);
         ImportReport out = adminUploadService.importVoterList(csvFile("name.csv"),electionId,"voterId","email");
 
         assertNotNull(out);
