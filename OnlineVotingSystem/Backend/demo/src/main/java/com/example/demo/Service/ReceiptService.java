@@ -2,6 +2,7 @@ package com.example.demo.Service;
 import com.example.demo.Exception.ApiException;
 import com.example.demo.Exception.BadRequestException;
 import com.example.demo.Exception.NotFoundException;
+import com.example.demo.Records.ReceiptTokenClaim;
 import com.example.demo.ServiceInterface.ReceiptServiceInterface;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,7 +35,7 @@ public class ReceiptService implements ReceiptServiceInterface {
         this.receiptTokenSecret = receiptTokenSecret.trim();
         this.objectMapper = objectMapper;
     }
-    public record ReceiptTokenClaim(UUID electionId, String receiptToken, long issuedAtEppochSeconds) {}
+//    public record ReceiptTokenClaim(UUID electionId, String receiptToken, long issuedAtEppochSeconds) {}
 
     @Override
     public String generateReceiptHash(UUID electionId, String receiptToken) {
