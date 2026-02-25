@@ -92,4 +92,58 @@ public class VerificationControllerIT extends IntegrationTestBase {
         assertTrue(response.getBody().contains("expiryTime"));
 
     }
+    @Test
+    void verifyShouldReturn409_whenElectionNotRunning() {
+        // org
+        OrganizationModel org = new OrganizationModel();
+        org.setType("uni");
+        org.setName("lsbu");
+        org.setCountry("uk");
+        org.setAllowedDomains(List.of("test.com"));
+        organizationRepository.save(org);
+
+        // creator
+        UserModel creator = new UserModel();
+        creator.setEmail("creator@test.com");
+        creator.setKeycloakId("kc-test");
+        creator.setRole(Role.voter);
+        creator.setOrganization(org);
+        creator = userModelRepository.save(creator);
+
+        // logged-in user
+        UserModel user = new UserModel();
+        user.setId(UUID.randomUUID());
+        user.setEmail("test@test.com");
+        user.setOrganization(org);
+        when(userInfoService.getCurrentUser()).thenReturn(user);
+
+        // election NOT running
+        ElectionModel election = new ElectionModel();
+        election.setOrganization(org);
+        election.setStartTime(LocalDateTime.now());
+        election.setEndTime(LocalDateTime.now().plusDays(1));
+        election.setStatus(ElectionStatus.closed);
+        election.setName("Election-1");
+        election.setCreatedBy(creator);
+        election = electionModelRepository.save(election);
+
+        // voter exists
+        VoterListModel voter = new VoterListModel();
+        voter.setVoterId("123");
+        voter.setEmail("test@test.com");
+        voter.setElection(election);
+        voter.setBlocked(false);
+        voter.setHasVoted(false);
+        voterListModelRepository.save(voter);
+
+        // call API
+        String url = "/voter/verification/verify?voterId=123&electionId=" + election.getId();
+
+        ResponseEntity<String> response =
+                restTemplate.postForEntity(url, null, String.class);
+
+        // assert
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertTrue(response.getBody().contains("ELECTION_NOT_RUNNING"));
+    }
 }
