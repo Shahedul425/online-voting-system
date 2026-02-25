@@ -135,6 +135,8 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
         return "Election updated";
     }
 
+//    STOPPED ELECTION SHOULD BE ABLE TO RESUME CURRENTLY NOT
+
     @Override
     public void startElection(String electionId) {
         ElectionModel election = getElectionOrThrowAndScope(electionId);
@@ -221,6 +223,16 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
     public void publishElectionResult(String electionId) {
         ElectionModel election = getElectionOrThrowAndScope(electionId);
 
+        if (election.getStatus() == ElectionStatus.published) {
+            log.warn("election publish rejected",
+                    kv("action", "PUBLISH_ELECTION"),
+                    kv("entity", "ELECTION"),
+                    kv("result", "REJECTED"),
+                    kv("reason", "ALREADY_PUBLISHED"),
+                    kv("electionId", election.getId().toString())
+            );
+            throw new ConflictException("ALREADY_PUBLISHED", "Election already published");
+        }
         if (election.getStatus() != ElectionStatus.closed) {
             log.warn("election publish rejected",
                     kv("action", "PUBLISH_ELECTION"),
@@ -237,16 +249,7 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
             throw new ConflictException("ELECTION_NOT_CLOSED", "Election must be closed to publish");
         }
 
-        if (election.getStatus() == ElectionStatus.published) {
-            log.warn("election publish rejected",
-                    kv("action", "PUBLISH_ELECTION"),
-                    kv("entity", "ELECTION"),
-                    kv("result", "REJECTED"),
-                    kv("reason", "ALREADY_PUBLISHED"),
-                    kv("electionId", election.getId().toString())
-            );
-            throw new ConflictException("ALREADY_PUBLISHED", "Election already published");
-        }
+
 
         var votes = voteModelRepository.findByElectionOrdered(election.getId());
         if (votes.isEmpty()) {
