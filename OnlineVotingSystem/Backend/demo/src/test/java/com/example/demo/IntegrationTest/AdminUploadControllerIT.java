@@ -6,6 +6,7 @@ import com.example.demo.Enums.Role;
 import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.OrganizationModel;
 import com.example.demo.Models.UserModel;
+import com.example.demo.Repositories.AuditLogsRepository;
 import com.example.demo.Repositories.ElectionModelRepository;
 import com.example.demo.Repositories.OrganizationRepository;
 import com.example.demo.Repositories.UserModelRepository;
@@ -53,13 +54,15 @@ public class AdminUploadControllerIT extends IntegrationTestBase {
     @Autowired
     @Qualifier("voterImportJob")
     Job voterImportJob;
-//    @BeforeEach
-//    public void setup() {
-//        electionModelRepository.deleteAll();
-//        userModelRepository.deleteAll();
-//        organizationRepository.deleteAll();
-//    }
-
+    @Autowired
+    AuditLogsRepository auditLogsRepository;
+    @BeforeEach
+    void setup() {
+        auditLogsRepository.deleteAll();
+        electionModelRepository.deleteAll();
+        userModelRepository.deleteAll();
+        organizationRepository.deleteAll();
+    }
     @Test
     void uploadShouldSuccess_whenHappyPath() throws Exception {
         UUID orgId = UUID.randomUUID();
