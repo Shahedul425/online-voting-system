@@ -1,6 +1,7 @@
 # Online Voting System
 
-![Build](https://img.shields.io/github/actions/workflow/status/Shahedul425/online-voting-system/build-deploy.yml?label=CI&logo=github)[![codecov](https://codecov.io/gh/Shahedul425/online-voting-system/branch/main/graph/badge.svg)](https://codecov.io/gh/Shahedul425/online-voting-system)
+![CI](https://github.com/Shahedul425/online-voting-system/actions/workflows/main.yml/badge.svg)
+[![codecov](https://codecov.io/gh/Shahedul425/online-voting-system/branch/main/graph/badge.svg)](https://codecov.io/gh/Shahedul425/online-voting-system)
 ![Tests](https://img.shields.io/badge/tests-79%20passing-brightgreen)
 
 A secure and verifiable online voting platform built with **Spring Boot**.
