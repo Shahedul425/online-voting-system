@@ -22,6 +22,11 @@ jobs:
       - name: Build and run tests with coverage
         run: mvn -B clean verify --file OnlineVotingSystem/Backend/demo/pom.xml
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: OnlineVotingSystem/Backend/demo/target/site/jacoco/jacoco.xml
+
       - name: Zip JaCoCo report
         run: |
           cd OnlineVotingSystem/Backend/demo/target/site
