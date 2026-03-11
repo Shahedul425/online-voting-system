@@ -12,6 +12,7 @@ import com.example.demo.Repositories.UserModelRepository;
 import com.example.demo.Repositories.VoterListModelRepository;
 import com.example.demo.Service.UserInfoService;
 import com.example.demo.TestHelpers.IntegrationTestBase;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.client.TestRestTemplate;
@@ -39,6 +40,13 @@ public class VerificationControllerIT extends IntegrationTestBase {
     UserModelRepository userModelRepository;
     @MockitoBean
     UserInfoService userInfoService;
+
+    @BeforeEach
+    public void setup() {
+        electionModelRepository.deleteAll();
+        userModelRepository.deleteAll();
+        organizationRepository.deleteAll();
+    }
 
     @Test
     void verifyShouldReturnToken_whenHappyPath(){
@@ -145,5 +153,124 @@ public class VerificationControllerIT extends IntegrationTestBase {
         // assert
         assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
         assertTrue(response.getBody().contains("ELECTION_NOT_RUNNING"));
+    }
+
+    @Test
+    void verifyShouldReturnForbiddenException_whenCrossOrganizationAccess() {
+        // org
+        OrganizationModel org = new OrganizationModel();
+        org.setType("uni");
+        org.setName("lsbu");
+        org.setCountry("uk");
+        org.setAllowedDomains(List.of("test.com"));
+        organizationRepository.save(org);
+
+        // org
+        OrganizationModel org1 = new OrganizationModel();
+        org1.setType("uni");
+        org1.setName("ucl");
+        org1.setCountry("uk");
+        org1.setAllowedDomains(List.of("test1.com"));
+        organizationRepository.save(org1);
+
+        // creator
+        UserModel creator = new UserModel();
+        creator.setEmail("creator@test.com");
+        creator.setKeycloakId("kc-test");
+        creator.setRole(Role.voter);
+        creator.setOrganization(org);
+        creator = userModelRepository.save(creator);
+
+        // logged-in user
+        UserModel user = new UserModel();
+        user.setId(UUID.randomUUID());
+        user.setEmail("test@test1.com");
+        user.setOrganization(org1);
+        when(userInfoService.getCurrentUser()).thenReturn(user);
+
+        // election NOT running
+        ElectionModel election = new ElectionModel();
+        election.setOrganization(org);
+        election.setStartTime(LocalDateTime.now());
+        election.setEndTime(LocalDateTime.now().plusDays(1));
+        election.setStatus(ElectionStatus.closed);
+        election.setName("Election-1");
+        election.setCreatedBy(creator);
+        election = electionModelRepository.save(election);
+
+        // voter exists
+        VoterListModel voter = new VoterListModel();
+        voter.setVoterId("123");
+        voter.setEmail("test@test1.com");
+        voter.setElection(election);
+        voter.setBlocked(false);
+        voter.setHasVoted(false);
+        voterListModelRepository.save(voter);
+
+        // call API
+        String url = "/voter/verification/verify?voterId=123&electionId=" + election.getId();
+
+        ResponseEntity<String> response =
+                restTemplate.postForEntity(url, null, String.class);
+
+        // assert
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertTrue(response.getBody().contains("CROSS_ORG_ACCESS"));
+    }
+
+    @Test
+    void verifyShouldReturnForbiddenException_whenVoterNotFound() {
+        // org
+        OrganizationModel org = new OrganizationModel();
+        org.setType("uni");
+        org.setName("lsbu");
+        org.setCountry("uk");
+        org.setAllowedDomains(List.of("test.com"));
+        organizationRepository.save(org);
+
+
+        // creator
+        UserModel creator = new UserModel();
+        creator.setEmail("creator@test.com");
+        creator.setKeycloakId("kc-test");
+        creator.setRole(Role.voter);
+        creator.setOrganization(org);
+        creator = userModelRepository.save(creator);
+
+        // logged-in user
+        UserModel user = new UserModel();
+        user.setId(UUID.randomUUID());
+        user.setEmail("test@test1.com");
+        user.setOrganization(org);
+        when(userInfoService.getCurrentUser()).thenReturn(user);
+
+        // election NOT running
+        ElectionModel election = new ElectionModel();
+        election.setOrganization(org);
+        election.setStartTime(LocalDateTime.now());
+        election.setEndTime(LocalDateTime.now().plusDays(1));
+        election.setStatus(ElectionStatus.running);
+        election.setName("Election-1");
+        election.setCreatedBy(creator);
+        election = electionModelRepository.save(election);
+
+        // voter exists
+        VoterListModel voter = new VoterListModel();
+        voter.setVoterId("123");
+        voter.setEmail("test@test.com");
+        voter.setElection(election);
+        voter.setBlocked(false);
+        voter.setHasVoted(false);
+        voterListModelRepository.save(voter);
+
+        // call API
+        String url = "/voter/verification/verify?voterId=123&electionId=" + election.getId();
+
+        ResponseEntity<String> response =
+                restTemplate.postForEntity(url, null, String.class);
+
+        // assert
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertTrue(response.getBody().contains("VOTER_NOT_FOUND"));
     }
 }
