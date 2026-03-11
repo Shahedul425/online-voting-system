@@ -23,3 +23,13 @@ jobs:
 
       - name: Build the application
         run: mvn -B clean package --file OnlineVotingSystem/Backend/demo/pom.xml
+
+      - name: Build and test application
+        run: mvn -B clean verify --file OnlineVotingSystem/Backend/demo/pom.xml
+
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: OnlineVotingSystem/Backend/demo/target/site/jacoco

@@ -6,10 +6,7 @@ import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.OrganizationModel;
 import com.example.demo.Models.UserModel;
 import com.example.demo.Models.VoterListModel;
-import com.example.demo.Repositories.ElectionModelRepository;
-import com.example.demo.Repositories.OrganizationRepository;
-import com.example.demo.Repositories.UserModelRepository;
-import com.example.demo.Repositories.VoterListModelRepository;
+import com.example.demo.Repositories.*;
 import com.example.demo.Service.UserInfoService;
 import com.example.demo.TestHelpers.IntegrationTestBase;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,14 +37,20 @@ public class VerificationControllerIT extends IntegrationTestBase {
     UserModelRepository userModelRepository;
     @MockitoBean
     UserInfoService userInfoService;
+    @Autowired
+    AuditLogsRepository auditLogsRepository;
 
+    @Autowired
+    OneTimeTokenModelRepository oneTimeTokenModelRepository;
     @BeforeEach
     public void setup() {
+        oneTimeTokenModelRepository.deleteAll();
+        voterListModelRepository.deleteAll();
+        auditLogsRepository.deleteAll();
         electionModelRepository.deleteAll();
         userModelRepository.deleteAll();
         organizationRepository.deleteAll();
     }
-
     @Test
     void verifyShouldReturnToken_whenHappyPath(){
         UUID orgId = UUID.randomUUID();

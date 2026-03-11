@@ -59,13 +59,14 @@ public class ElectionControllerIT extends IntegrationTestBase {
 
     @BeforeEach
     void setUp() {
-        electionModelRepository.deleteAll();
-        voterListModelRepository.deleteAll();
-        organizationRepository.deleteAll();
-        userModelRepository.deleteAll();
-        voteModelRepository.deleteAll();
+        receiptLeafIndexRepository.deleteAll();
         merkleLevelModelRepository.deleteAll();
+        voteModelRepository.deleteAll();
+        voterListModelRepository.deleteAll();
         auditLogsRepository.deleteAll();
+        electionModelRepository.deleteAll();
+        userModelRepository.deleteAll();
+        organizationRepository.deleteAll();
     }
 
 
