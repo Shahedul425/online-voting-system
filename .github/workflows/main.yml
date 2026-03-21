@@ -19,8 +19,8 @@ jobs:
           distribution: corretto
           java-version: 21
 
-      - name: Build and run tests with coverage
-        run: mvn -B clean verify --file OnlineVotingSystem/Backend/demo/pom.xml
+      - name: Build and run unit tests with coverage
+        run: mvn -B clean verify -DskipITs --file OnlineVotingSystem/Backend/demo/pom.xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4

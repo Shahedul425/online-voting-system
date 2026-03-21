@@ -1,0 +1,25 @@
+# Env files
+.env
+.env.*
+!.env.example
+
+# Keep examples only
+**/.env
+**/.env.*
+!**/.env.example
+
+# Node
+node_modules/
+**/node_modules/
+
+# Java
+target/
+**/target/
+
+# IDE
+.idea/
+**/.idea/
+
+# Logs
+*.log
+logs/

@@ -49,10 +49,18 @@ public class SecurityConfig {
         http.csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(request -> {
                     var c = new org.springframework.web.cors.CorsConfiguration();
-                    c.setAllowedOrigins(List.of("http://localhost:5173"));
+
+                    c.setAllowedOrigins(List.of(
+                            "http://localhost:5173",
+                            "http://localhost:80",
+                            "https://trustvote.live",
+                            "https://www.trustvote.live"
+                    ));
+
                     c.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
                     c.setAllowedHeaders(List.of("*"));
                     c.setAllowCredentials(true);
+
                     return c;
                 }))
                 .authorizeHttpRequests(auth -> auth

@@ -1,0 +1,154 @@
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    networks:
+      - ovs-network
+
+  app_db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ovsApp
+      POSTGRES_USER: ovsApp
+      POSTGRES_PASSWORD: change-this-app-db-password
+    ports:
+      - "5433:5432"
+    volumes:
+      - app_db_data:/var/lib/postgresql/data
+    networks:
+      - ovs-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.1
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: password
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+    ports:
+      - "8081:8080"
+    depends_on:
+      - postgres
+    networks:
+      - ovs-network
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    volumes:
+      - ./OnlineVotingSystem/Backend/demo/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - ovs-network
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./OnlineVotingSystem/Backend/demo/monitoring/loki.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - ovs-network
+
+  tempo:
+    image: grafana/tempo:2.6.1
+    command: ["-config.file=/etc/tempo/tempo.yml"]
+    volumes:
+      - ./OnlineVotingSystem/Backend/demo/monitoring/tempo.yml:/etc/tempo/tempo.yml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+      - "4318:4318"
+    networks:
+      - ovs-network
+
+  alloy:
+    image: grafana/alloy:latest
+    volumes:
+      - ./OnlineVotingSystem/Backend/demo/monitoring/alloy:/etc/alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"]
+    ports:
+      - "12345:12345"
+    depends_on:
+      - loki
+    networks:
+      - ovs-network
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./OnlineVotingSystem/Backend/demo/monitoring/grafana-provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    networks:
+      - ovs-network
+
+  app:
+    profiles: ["full"]
+    build:
+      context: ./OnlineVotingSystem/Backend/demo
+      dockerfile: Dockerfile
+    env_file:
+      - ./OnlineVotingSystem/Backend/demo/.env.prod
+    environment:
+      OTEL_SERVICE_NAME: ovs-app
+      OTEL_TRACES_EXPORTER: otlp
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_METRICS_EXPORTER: none
+      OTEL_LOGS_EXPORTER: none
+    ports:
+      - "8080:8080"
+    depends_on:
+      - app_db
+      - keycloak
+      - tempo
+    networks:
+      - ovs-network
+
+  frontend:
+    profiles: ["full"]
+    build:
+      context: ./OnlineVotingSystem/Frontend/my-react-app
+      dockerfile: Dockerfile
+    ports:
+      - "5173:80"
+    depends_on:
+      - app
+    networks:
+      - ovs-network
+
+volumes:
+  keycloak_db_data:
+  app_db_data:
+  grafana_data:
+  loki_data:
+  tempo_data:
+
+networks:
+  ovs-network:
