@@ -1,4 +1,9 @@
-.idea/
-.git/
-*.iml
-node_modules/
+target
+.git
+.gitignore
+.idea
+node_modules
+.env
+.env.*
+Dockerfile*
+README.md

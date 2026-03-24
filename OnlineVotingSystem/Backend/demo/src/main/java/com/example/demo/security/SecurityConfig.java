@@ -1,17 +1,20 @@
 package com.example.demo.security;
 
-
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.core.annotation.Order;
+import org.springframework.web.cors.CorsConfiguration;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Profile("!tests")
 @EnableWebSecurity
@@ -19,6 +22,9 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtConverter jwtConverter;
+
+    @Value("${app.cors.allowed-origins:http://localhost:5173}")
+    private String allowedOrigins;
 
     public SecurityConfig(JwtConverter jwtConverter) {
         this.jwtConverter = jwtConverter;
@@ -30,7 +36,6 @@ public class SecurityConfig {
         converter.setJwtGrantedAuthoritiesConverter(jwtConverter);
         return converter;
     }
-
 
     @Bean
     @Order(1)
@@ -46,18 +51,18 @@ public class SecurityConfig {
     @Bean
     @Order(2)
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.csrf(AbstractHttpConfigurer::disable)
+        http
+                .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(request -> {
-                    var c = new org.springframework.web.cors.CorsConfiguration();
+                    CorsConfiguration c = new CorsConfiguration();
 
-                    c.setAllowedOrigins(List.of(
-                            "http://localhost:5173",
-                            "http://localhost:80",
-                            "https://trustvote.live",
-                            "https://www.trustvote.live"
-                    ));
+                    List<String> origins = Arrays.stream(allowedOrigins.split(","))
+                            .map(String::trim)
+                            .filter(s -> !s.isBlank())
+                            .collect(Collectors.toList());
 
-                    c.setAllowedMethods(List.of("GET","POST","PUT","DELETE","OPTIONS"));
+                    c.setAllowedOrigins(origins);
+                    c.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
                     c.setAllowedHeaders(List.of("*"));
                     c.setAllowCredentials(true);
 
