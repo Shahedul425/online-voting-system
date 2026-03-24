@@ -2,10 +2,6 @@
 .env
 .env.*
 !.env.example
-
-# Keep examples only
-**/.env
-**/.env.*
 !**/.env.example
 
 # Node
@@ -19,7 +15,13 @@ target/
 # IDE
 .idea/
 **/.idea/
+.vscode/
+**/.vscode/
 
 # Logs
 *.log
 logs/
+
+# OS files
+.DS_Store
+Thumbs.db

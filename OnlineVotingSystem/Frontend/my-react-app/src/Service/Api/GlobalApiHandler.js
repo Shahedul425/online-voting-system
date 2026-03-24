@@ -1,7 +1,9 @@
-const DEFAULT_BASE_URL = import.meta?.env?.VITE_API_BASE_URL || "http://localhost:8080";
+const DEFAULT_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
 function newRequestId() {
-    if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
@@ -29,7 +31,7 @@ export async function apiRequest(path, options = {}) {
         query,
         json,
         formData,
-        headers = {}
+        headers = {},
     } = options;
 
     const rid = newRequestId();
@@ -43,7 +45,8 @@ export async function apiRequest(path, options = {}) {
                 .join("&")
             : "";
 
-    const url = `${baseUrl}${path}${qs}`;
+    const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+    const url = `${baseUrl}${normalizedPath}${qs}`;
 
     const finalHeaders = {
         "X-Request-Id": rid,
@@ -56,11 +59,11 @@ export async function apiRequest(path, options = {}) {
             return {
                 ok: false,
                 error: {
-                    message: "Missing access token.Please login.",
+                    message: "Missing access token. Please login.",
                     status: 401,
                     code: "UNAUTHORIZED",
                     requestId: rid,
-                    path,
+                    path: normalizedPath,
                     details: [],
                 },
             };
@@ -68,7 +71,7 @@ export async function apiRequest(path, options = {}) {
         finalHeaders.Authorization = `Bearer ${token}`;
     }
 
-    let body = undefined;
+    let body;
 
     if (json !== undefined) {
         finalHeaders["Content-Type"] = "application/json";
@@ -80,11 +83,16 @@ export async function apiRequest(path, options = {}) {
     }
 
     try {
-        const res = await fetch(url, { method, headers: finalHeaders, body });
+        const res = await fetch(url, {
+            method,
+            headers: finalHeaders,
+            body,
+        });
 
         if (res.ok) {
             const text = await res.text();
             if (!text) return { ok: true, data: null };
+
             try {
                 return { ok: true, data: JSON.parse(text) };
             } catch {
@@ -93,16 +101,18 @@ export async function apiRequest(path, options = {}) {
         }
 
         const apiErr = await safeParseJson(res);
-        if (apiErr && typeof apiErr === "object" && apiErr.message) {
+
+        if (apiErr && typeof apiErr === "object") {
             return {
                 ok: false,
                 error: {
-                    message: apiErr.message || "Request failed",
+                    message: apiErr.message || `Request failed (${res.status})`,
                     status: apiErr.status ?? res.status,
-                    code: apiErr.code,
+                    code: apiErr.code || "HTTP_ERROR",
                     details: apiErr.details || [],
+                    fieldErrors: apiErr.fieldErrors || {},
                     requestId: apiErr.requestId || rid,
-                    path: apiErr.path || path,
+                    path: apiErr.path || normalizedPath,
                 },
             };
         }
@@ -115,19 +125,19 @@ export async function apiRequest(path, options = {}) {
                 code: "HTTP_ERROR",
                 details: [],
                 requestId: rid,
-                path,
+                path: normalizedPath,
             },
         };
     } catch {
         return {
             ok: false,
             error: {
-                message: "Network error.Check backend server/ CORS.",
+                message: "Network error. Check backend server or CORS.",
                 status: 0,
                 code: "NETWORK_ERROR",
                 details: [],
                 requestId: rid,
-                path,
+                path: normalizedPath,
             },
         };
     }

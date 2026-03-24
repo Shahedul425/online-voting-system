@@ -5,17 +5,17 @@ export async function registerRequest(email, username, firstName, lastName, pass
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, email, firstName, lastName, password }),
-        credentials: "include"
     });
 
+    const data = await response.json().catch(() => null);
+
     if (response.status === 409) {
-        const data = await response.json();
-        throw new Error(data.error);
+        throw new Error(data?.message || data?.error || "User already exists.");
     }
 
     if (!response.ok) {
-        throw new Error("Registration failed");
+        throw new Error(data?.message || "Registration failed.");
     }
 
-    return await response.json();
+    return data;
 }

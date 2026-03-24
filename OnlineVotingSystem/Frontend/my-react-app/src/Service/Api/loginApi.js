@@ -5,9 +5,11 @@ export async function loginRequest(username, password) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
-        credentials: "include"
     });
 
-    if (!response.ok) throw new Error("Login failed!!");
+    if (!response.ok) {
+        throw new Error("Login failed.");
+    }
+
     return await response.json();
 }
