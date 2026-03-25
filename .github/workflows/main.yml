@@ -1,5 +1,4 @@
-name: Build, Push, and Deploy OnlineVotingSystem
-
+name: Build and Deploy OnlineVotingSystem
 on:
   push:
     branches: ["main"]
