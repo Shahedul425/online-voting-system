@@ -10,6 +10,7 @@ import com.example.demo.Repositories.OrganizationRepository;
 import com.example.demo.Repositories.UserModelRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -31,9 +32,9 @@ public class RegisterService {
     private final UserModelRepository userModelRepository;
     private final OrganizationRepository organizationRepository;
 
-    private final String realm = "OVS-System";
-    private final String keycloakUrl = "http://localhost:8081";
-    private final String adminClientId = "admin-cli";
+    @Value("${keycloak.base-url}") String keycloakUrl;
+    @Value("${keycloak.realm}") String realm;
+    @Value("${keycloak.client-id}") String adminClientId;
 
     public void register(RegisterRequest req) {
         String email = req.email().trim().toLowerCase();
