@@ -1,40 +1,65 @@
-name: Build & Deploy OnlineVotingSystem
+name: Build and Deploy
 
 on:
-  pull_request:
-    branches: [ "main" ]
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-  build-deploy:
+
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
 
-      - name: Setup JDK 21
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: corretto
           java-version: 21
 
-      - name: Build and run unit tests with coverage
-        run: mvn -B clean verify -DskipITs --file OnlineVotingSystem/Backend/demo/pom.xml
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: OnlineVotingSystem/Backend/demo/target/site/jacoco/jacoco.xml
-
-      - name: Zip JaCoCo report
+      - name: Build backend
         run: |
-          cd OnlineVotingSystem/Backend/demo/target/site
-          zip -r jacoco-report.zip jacoco
+          mvn clean package -DskipTests \
+          --file OnlineVotingSystem/Backend/demo/pom.xml
 
-      - name: Upload JaCoCo report
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Build backend Docker image
+        run: |
+          docker build \
+          -t ghcr.io/${{ github.repository_owner }}/online-voting-system-backend:latest \
+          ./OnlineVotingSystem/Backend/demo
+
+      - name: Login to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+          | docker login ghcr.io \
+          -u ${{ github.actor }} \
+          --password-stdin
+
+      - name: Push backend image
+        run: |
+          docker push \
+          ghcr.io/${{ github.repository_owner }}/online-voting-system-backend:latest
+
+  deploy:
+
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: production
+
+    steps:
+
+      - name: Deploy to server via SSH
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: jacoco-report
-          path: OnlineVotingSystem/Backend/demo/target/site/jacoco-report.zip
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            cd /opt/trustvote/online-voting-system
+            ./deploy.sh
