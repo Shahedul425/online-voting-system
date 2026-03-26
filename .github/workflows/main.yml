@@ -95,6 +95,11 @@ jobs:
           context: ./OnlineVotingSystem/Frontend/my-react-app
           file: ./OnlineVotingSystem/Frontend/my-react-app/Dockerfile
           push: true
+          build-args: |
+            VITE_API_BASE_URL=https://api.trustvote.live
+            VITE_KEYCLOAK_URL=https://auth.trustvote.live/auth
+            VITE_KEYCLOAK_REALM=OVS-System
+            VITE_KEYCLOAK_CLIENT_ID=ovs_frontend
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.image_tag }}
@@ -112,10 +117,11 @@ jobs:
             export FRONTEND_IMAGE="${{ env.FRONTEND_IMAGE }}"
             export IMAGE_TAG="${{ steps.meta.outputs.image_tag }}"
             cd /opt/trustvote/online-voting-system
+            chmod +x deploy.sh
             /usr/bin/env bash ./deploy.sh
 
       - name: Health check API
         if: github.event_name == 'push'
         run: |
-          sleep 15
+          sleep 20
           curl -fsS https://api.trustvote.live/actuator/health
