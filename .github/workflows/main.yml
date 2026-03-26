@@ -123,5 +123,17 @@ jobs:
       - name: Health check API
         if: github.event_name == 'push'
         run: |
-          sleep 20
-          curl -fsS https://api.trustvote.live/actuator/health
+          echo "Waiting for API to become healthy..."
+
+          for i in {1..18}; do
+            if curl -fsS https://api.trustvote.live/actuator/health; then
+              echo "API is healthy"
+              exit 0
+            fi
+
+            echo "Attempt $i failed, retrying in 10 seconds..."
+            sleep 10
+          done
+
+          echo "API did not become healthy in time"
+          exit 1
