@@ -82,7 +82,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./OnlineVotingSystem/Backend/demo
-          file: ./OnlineVotingSystem/Backend/demo/Dockerfile.prod
+          file: ./OnlineVotingSystem/Backend/demo/Dockerfile
           push: true
           tags: |
             ${{ env.BACKEND_IMAGE }}:latest
@@ -93,13 +93,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./OnlineVotingSystem/Frontend/my-react-app
-          file: ./OnlineVotingSystem/Frontend/my-react-app/Dockerfile.prod
+          file: ./OnlineVotingSystem/Frontend/my-react-app/Dockerfile
           push: true
-          build-args: |
-            VITE_API_BASE_URL=https://api.trustvote.live
-            VITE_KEYCLOAK_URL=https://auth.trustvote.live/auth
-            VITE_KEYCLOAK_REALM=OVS-System
-            VITE_KEYCLOAK_CLIENT_ID=ovs_frontend
           tags: |
             ${{ env.FRONTEND_IMAGE }}:latest
             ${{ env.FRONTEND_IMAGE }}:${{ steps.meta.outputs.image_tag }}
