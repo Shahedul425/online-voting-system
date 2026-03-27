@@ -34,7 +34,7 @@ public class RegisterService {
 
     @Value("${keycloak.base-url}") String keycloakUrl;
     @Value("${keycloak.realm}") String realm;
-    @Value("${keycloak.client-id}") String adminClientId;
+//    @Value("${keycloak.client-id}") String adminClientId;
 
     public void register(RegisterRequest req) {
         String email = req.email().trim().toLowerCase();
@@ -165,7 +165,7 @@ public class RegisterService {
         headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
         MultiValueMap<String, String> form = new LinkedMultiValueMap<>();
-        form.add("client_id", adminClientId);
+        form.add("client_id", "admin-cli");
         form.add("grant_type", "password");
         form.add("username", "admin");
         form.add("password", "admin");
