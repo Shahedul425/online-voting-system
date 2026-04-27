@@ -67,6 +67,8 @@ If you see `The iss claim is not valid`:
 2. It must match `spring.security.oauth2.resourceserver.jwt.issuer-uri` in `application-dev.properties`.
 3. In Docker the browser and the app see Keycloak at different hostnames — that's why we split `issuer-uri` (browser view) from `jwk-set-uri` (in-Docker view).
 
+**Prod gotcha:** the prod Keycloak runs with `--http-relative-path=/auth`, so its issuer string is `https://auth.trustvote.live/auth/realms/OVS-System` — note the `/auth` segment. Both `SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI` and `KEYCLOAK_BASE_URL` in the droplet's `.env` MUST include `/auth`, otherwise every authenticated `/user/me`, `/admin/*`, `/voter/*` request 401s. Local dev does NOT use `/auth` because Keycloak there runs at the root path.
+
 ## Email delivery
 
 **OTP (ballot verification):** wired. `OtpMailService` sends a 6-digit code via Gmail SMTP whenever `VerificationService` issues a token. The send is fire-and-forget — if SMTP is misconfigured the verification still completes and the dev `devOtp` field echoes the code in the response so demos keep working.
