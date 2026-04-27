@@ -145,6 +145,20 @@ services:
       RECEIPT_TOKEN_SECRET: ${RECEIPT_TOKEN_SECRET}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus
       MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      # Public base URL — used by OtpMailService when building the verify-receipt
+      # deep link inside the receipt email. Must point at the user-facing frontend.
+      OVS_PUBLIC_BASE_URL: ${OVS_PUBLIC_BASE_URL:-https://trustvote.live}
+      # When true the OTP is echoed back in the API response body for demos.
+      # Flip to false in prod once SMTP is confirmed working so the OTP only
+      # leaves the system through email.
+      OVS_DEV_RETURN_OTP: ${OVS_DEV_RETURN_OTP:-true}
+      # ── SMTP for OTP + receipt email (Gmail App Password) ─────────────────
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME}
+      SMTP_PASSWORD: ${SMTP_PASSWORD}
+      OVS_MAIL_FROM: ${OVS_MAIL_FROM}
+      OVS_MAIL_FROM_NAME: ${OVS_MAIL_FROM_NAME:-TrustVote}
       OTEL_SERVICE_NAME: ovs-app
       OTEL_TRACES_EXPORTER: otlp
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318

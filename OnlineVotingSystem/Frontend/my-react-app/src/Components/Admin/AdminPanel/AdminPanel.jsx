@@ -1,152 +1,144 @@
-import React from "react";
+// src/Components/Admin/AdminPanel/AdminPanel.jsx
 import { useNavigate } from "react-router-dom";
 import {
-    PlusCircle,
-    ListChecks,
-    ShieldCheck,
-    LogOut,
-    FileClock,
-    PlayCircle,
-    PauseCircle,
-    Lock,
-    Archive,
+    PlusCircle, ListChecks, BarChart3, FileClock,
+    PlayCircle, PauseCircle, Lock, Archive, Users, ShieldCheck,
 } from "lucide-react";
-import { AuthToken } from "../../../Service/GlobalState/authToken";
-import { useAppStore } from "../../../Service/GlobalState/appStore";
+import AdminLayout from "../../../components/layout/AdminLayout";
+import { KpiCard, Panel, Btn, StatusPill, ShareBar, InfoRow } from "../../ui";
+
+const STATUS_SHORTCUTS = [
+    { label: "Draft",     status: "draft",     icon: FileClock,    hint: "Upload lists & prepare" },
+    { label: "Running",   status: "running",   icon: PlayCircle,   hint: "Monitor activity" },
+    { label: "Stopped",   status: "stopped",   icon: PauseCircle,  hint: "Resume or close" },
+    { label: "Closed",    status: "closed",    icon: Lock,         hint: "Ready to publish" },
+    { label: "Published", status: "published", icon: Archive,      hint: "Archived & visible" },
+];
+
+const RECENT = [
+    { name: "Student Council 2026", status: "running",   voters: 4821, turnout: 72, votes: 1847 },
+    { name: "Sports Rep Election",  status: "running",   voters: 1360, turnout: 45, votes: 612  },
+    { name: "Welfare Officer Vote", status: "closed",    voters: 2360, turnout: 89, votes: 2101 },
+    { name: "Arts Society Chair",   status: "draft",     voters: null, turnout: 0,  votes: null  },
+    { name: "Tech Society AGM",     status: "published", voters: 1607, turnout: 61, votes: 980  },
+];
 
 export default function AdminPanel() {
     const navigate = useNavigate();
-    const clearMe = useAppStore((s) => s.clearMe);
-    const clearElection = useAppStore((s) => s.clearElection);
-
-    function logout() {
-        AuthToken.clear();      // sessionStorage access_token
-        clearMe();
-        clearElection();
-        navigate("/signin", { replace: true });
-    }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex flex-col items-center justify-center text-white px-4 py-8">
-            <div className="text-center mb-8">
-                <h1 className="text-3xl font-extrabold text-indigo-500 tracking-tight">OVM Admin</h1>
-                <p className="text-gray-400 text-sm mt-1">Manage elections, uploads, lists and audit integrity</p>
+        <AdminLayout
+            breadcrumbs={[{ label: "Admin" }, { label: "Dashboard" }]}
+            topbarRight={
+                <Btn variant="primary" onClick={() => navigate("/admin/elections/create")}>
+                    + New Election
+                </Btn>
+            }
+        >
+            {/* KPI row */}
+            <div className="grid grid-cols-4 gap-3 animate-up">
+                <KpiCard icon={ListChecks} accent="purple" value="12"   label="Total Elections"   badge="↑ 3 this month" />
+                <KpiCard icon={PlayCircle} accent="cyan"   value="2"    label="Running Now"        badge="● Live" />
+                <KpiCard icon={Users}      accent="green"  value="4,821" label="Total Voters"      badge="all elections" />
+                <KpiCard icon={BarChart3}  accent="pink"   value="68.4%" label="Avg Turnout"       badge="↑ 5.2%" />
             </div>
 
-            <div className="w-full max-w-5xl bg-gray-800/90 border border-gray-700 rounded-2xl shadow-2xl p-8 space-y-10">
-                {/* Primary */}
-                <h2 className="text-xl font-semibold text-indigo-400 border-b border-gray-700 pb-2 text-center">
-                    🗳️ Election Management
-                </h2>
+            <div className="grid gap-3 animate-up-2" style={{ gridTemplateColumns: "1fr 290px" }}>
+                {/* Elections table */}
+                <Panel
+                    title="Recent Elections"
+                    action={
+                        <Btn variant="ghost" size="sm" onClick={() => navigate("/admin/elections/status?status=draft")}>
+                            View all →
+                        </Btn>
+                    }
+                    noPad
+                >
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                        <tr>
+                            {["Election", "Status", "Turnout", "Votes"].map(h => (
+                                <th key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", padding: "10px 16px", textAlign: "left", borderBottom: "1px solid var(--border)" }}>
+                                    {h}
+                                </th>
+                            ))}
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {RECENT.map((e, i) => (
+                            <tr
+                                key={e.name}
+                                onClick={() => navigate("/admin/elections/status?status=" + e.status)}
+                                style={{ borderBottom: i < RECENT.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none", cursor: "pointer", transition: "background .12s" }}
+                                onMouseEnter={ev => ev.currentTarget.style.background = "rgba(255,255,255,.02)"}
+                                onMouseLeave={ev => ev.currentTarget.style.background = "transparent"}
+                            >
+                                <td style={{ padding: "12px 16px" }}>
+                                    <div style={{ fontWeight: 600, color: "var(--t1)", fontSize: 13 }}>{e.name}</div>
+                                    {e.voters && <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 2 }}>{e.voters?.toLocaleString()} voters</div>}
+                                </td>
+                                <td style={{ padding: "12px 16px" }}><StatusPill status={e.status} /></td>
+                                <td style={{ padding: "12px 16px" }}><ShareBar pct={e.turnout} winner={e.status === "running"} /></td>
+                                <td style={{ padding: "12px 16px", fontFamily: "JetBrains Mono", fontWeight: 700, color: e.votes ? "var(--t1)" : "var(--t3)", fontSize: 13 }}>
+                                    {e.votes?.toLocaleString() ?? "—"}
+                                </td>
+                            </tr>
+                        ))}
+                        </tbody>
+                    </table>
+                </Panel>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 text-center">
-                    <ActionCard
-                        icon={<PlusCircle size={28} />}
-                        title="Create Election"
-                        subtitle="Create a new election for your organization"
-                        onClick={() => navigate("/admin/elections/create")}
-                    />
+                {/* Right column */}
+                <div className="flex flex-col gap-3">
+                    {/* Quick actions */}
+                    <Panel title="Quick Actions">
+                        <div className="flex flex-col gap-2">
+                            {[
+                                { label: "⚡ Create Election",       path: "/admin/elections/create",            variant: "primary" },
+                                { label: "↑ Upload Voters CSV",       path: "/admin/elections/status?status=draft", variant: "ghost"  },
+                                { label: "↑ Upload Candidates CSV",   path: "/admin/elections/status?status=draft", variant: "ghost"  },
+                                { label: "◈ View Results",            path: "/admin/elections/status?status=published", variant: "ghost" },
+                                { label: "⊙ Audit Logs",              path: "/admin/elections/status?status=running",   variant: "ghost" },
+                            ].map(a => (
+                                <Btn key={a.label} variant={a.variant} onClick={() => navigate(a.path)} className="w-full justify-center">
+                                    {a.label}
+                                </Btn>
+                            ))}
+                        </div>
+                    </Panel>
 
-                    <ActionCard
-                        icon={<ListChecks size={28} />}
-                        title="Manage Elections"
-                        subtitle="Browse by status and open an election workspace"
-                        onClick={() => navigate("/admin/elections/status?status=draft")}
-                    />
-
-                    <ActionCard
-                        icon={<Archive size={28} />}
-                        title="Published Elections"
-                        subtitle="View published results and history"
-                        onClick={() => navigate("/admin/elections/status?status=published")}
-                    />
-                </div>
-
-                {/* Status shortcuts */}
-                <div className="border-t border-gray-700 pt-6">
-                    <h2 className="text-lg font-semibold mb-4 text-indigo-400 text-center">
-                        Election Status Shortcuts
-                    </h2>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
-                        <PillCard
-                            icon={<FileClock className="h-5 w-5" />}
-                            label="Draft"
-                            hint="Upload lists & prepare"
-                            onClick={() => navigate("/admin/elections/status?status=draft")}
-                        />
-                        <PillCard
-                            icon={<PlayCircle className="h-5 w-5" />}
-                            label="Running"
-                            hint="Monitor activity"
-                            onClick={() => navigate("/admin/elections/status?status=running")}
-                        />
-                        <PillCard
-                            icon={<PauseCircle className="h-5 w-5" />}
-                            label="Stopped"
-                            hint="Resume or close"
-                            onClick={() => navigate("/admin/elections/status?status=stopped")}
-                        />
-                        <PillCard
-                            icon={<Lock className="h-5 w-5" />}
-                            label="Closed"
-                            hint="Ready to publish"
-                            onClick={() => navigate("/admin/elections/status?status=closed")}
-                        />
-                        <PillCard
-                            icon={<Archive className="h-5 w-5" />}
-                            label="Published"
-                            hint="Archived & visible"
-                            onClick={() => navigate("/admin/elections/status?status=published")}
-                        />
-                    </div>
-
-                    <p className="mt-4 text-center text-xs text-gray-400">
-                        Flow: pick a status → select an election → manage uploads, voters, candidates, audit, and lifecycle actions.
-                    </p>
-                </div>
-
-                {/* Footer */}
-                <div className="border-t border-gray-700 pt-6 flex flex-col items-center text-center">
-                    <ShieldCheck size={32} className="text-green-500 mb-2" />
-                    <p className="text-xs text-gray-400 w-3/4">All actions are logged securely.</p>
-
-                    <div className="flex justify-center pt-4 w-full">
-                        <button
-                            onClick={logout}
-                            className="flex items-center gap-2 text-sm text-gray-300 hover:text-red-400 transition mt-2"
-                        >
-                            <LogOut size={16} /> Logout
-                        </button>
-                    </div>
+                    {/* System health */}
+                    <Panel title="System">
+                        <InfoRow label="Audit log"         value={<span style={{ color: "var(--green)", fontWeight: 600 }}>✓ Active</span>} />
+                        <InfoRow label="Running elections" value={<span style={{ color: "var(--cyan)",  fontWeight: 600 }}>2 live</span>} />
+                        <InfoRow label="Pending uploads"   value={<span style={{ color: "var(--orange)", fontWeight: 600 }}>⚠ 1 draft</span>} />
+                        <InfoRow label="Token expiry"      value={<span style={{ color: "var(--green)", fontWeight: 600 }}>✓ Normal</span>} last />
+                    </Panel>
                 </div>
             </div>
-        </div>
-    );
-}
 
-function ActionCard({ icon, title, subtitle, onClick }) {
-    return (
-        <button
-            onClick={onClick}
-            className="flex flex-col items-center gap-3 bg-gray-900 hover:bg-indigo-600 transition rounded-xl py-6 px-4 shadow border border-gray-700 hover:border-indigo-400"
-        >
-            <div className="text-indigo-200">{icon}</div>
-            <div className="font-semibold text-sm">{title}</div>
-            <div className="text-xs text-gray-400">{subtitle}</div>
-        </button>
-    );
-}
-
-function PillCard({ icon, label, hint, onClick }) {
-    return (
-        <button
-            onClick={onClick}
-            className="flex flex-col items-center justify-center gap-2 rounded-xl border border-gray-700 bg-gray-900/60 hover:bg-indigo-600/25 hover:border-indigo-400 transition py-4"
-        >
-            <div className="text-indigo-200">{icon}</div>
-            <div className="text-sm font-semibold">{label}</div>
-            <div className="text-[11px] text-gray-400">{hint}</div>
-        </button>
+            {/* Status shortcuts */}
+            <Panel title="Election Status Shortcuts" subtitle="Flow: pick a status → select election → manage workspace" className="animate-up-3">
+                <div className="grid grid-cols-5 gap-3">
+                    {STATUS_SHORTCUTS.map(s => {
+                        const Icon = s.icon;
+                        return (
+                            <button
+                                key={s.status}
+                                onClick={() => navigate(`/admin/elections/status?status=${s.status}`)}
+                                className="flex flex-col items-center gap-2 py-4 rounded-xl transition-all"
+                                style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}
+                                onMouseEnter={ev => { ev.currentTarget.style.borderColor = "var(--purple-b)"; ev.currentTarget.style.background = "var(--purple-d)"; }}
+                                onMouseLeave={ev => { ev.currentTarget.style.borderColor = "var(--border)";   ev.currentTarget.style.background = "var(--surface-2)"; }}
+                            >
+                                <Icon size={18} style={{ color: "var(--t2)" }} />
+                                <span style={{ fontSize: 12.5, fontWeight: 600, color: "var(--t1)" }}>{s.label}</span>
+                                <span style={{ fontSize: 10.5, color: "var(--t3)" }}>{s.hint}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            </Panel>
+        </AdminLayout>
     );
 }

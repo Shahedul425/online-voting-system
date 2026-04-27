@@ -5,6 +5,10 @@ import './index.css'
 import App from './App.jsx'
 import ReactDOM from "react-dom/client";
 import keycloak from "./Service/Auth/Keycloak.js";
+import { initTheme } from "./ui/ThemeToggle";
+
+// Set theme class on <html> before React mounts so there's no flash.
+initTheme();
 
 keycloak.init({
     onLoad: "check-sso",

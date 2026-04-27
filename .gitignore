@@ -25,3 +25,9 @@ logs/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Design preview / generated mockups
+OnlineVotingSystem/design-previews/
+OnlineVotingSystem/design-previews-jsx/
+design-previews/
+design-previews-jsx/

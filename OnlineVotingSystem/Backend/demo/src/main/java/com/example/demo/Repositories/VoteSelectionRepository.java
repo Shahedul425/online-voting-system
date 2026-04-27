@@ -27,4 +27,7 @@ public interface VoteSelectionRepository extends JpaRepository<VoteSelectionMode
         order by vs.position asc, count(vs.id) desc
     """)
     List<CandidateTallyRow> tallyByElection(@Param("electionId") UUID electionId);
+
+    /** Used by AdminAuditBundleService to write per-vote selections into ballots.csv. */
+    List<VoteSelectionModel> findByVote_Id(UUID voteId);
 }

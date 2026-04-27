@@ -39,6 +39,11 @@ public class VoteCommitService implements CommitServiceInterface {
     private final UserInfoService userInfoService;
     private final SafeAuditService safeAuditService;
     private final ReceiptService receiptService;
+    private final MerkleTreeService merkleTreeService;
+    private final OtpMailService otpMailService;
+
+    @org.springframework.beans.factory.annotation.Value("${ovs.public.base-url:http://localhost:5173}")
+    private String publicBaseUrl;
 
     @Override
     @Transactional
@@ -63,11 +68,14 @@ public class VoteCommitService implements CommitServiceInterface {
                         "Idempotent replay: returning existing receipt");
 
                 // Do NOT log receipt; return it
-                return new VoteReceiptResponse(
+                VoteReceiptResponse resp = new VoteReceiptResponse(
                         v.getElectionId().getId(),
                         v.getReceiptHashToken(),
                         v.getCreatedAt()
                 );
+                byte[] leaf = merkleTreeService.leafHashFromReceiptToken(v.getReceiptHashToken());
+                resp.setLeafHash(java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(leaf));
+                return resp;
             }
         }
 
@@ -254,7 +262,23 @@ public class VoteCommitService implements CommitServiceInterface {
         auditVote(user, election, AuditActions.VOTE_CAST, ActionStatus.SUCCESS,
                 "Vote cast successfully. selections=" + req.getVotes().size());
 
-        return new VoteReceiptResponse(electionId, receipt, vote.getCreatedAt());
+        VoteReceiptResponse resp = new VoteReceiptResponse(electionId, receipt, vote.getCreatedAt());
+        byte[] leaf = merkleTreeService.leafHashFromReceiptToken(receipt);
+        resp.setLeafHash(java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(leaf));
+
+        // Email the receipt to the voter (best-effort — failures don't roll back).
+        // Pull the email from the voter row so we never leak the JWT email if it
+        // somehow differs. Verify URL deep-links to the public verification page.
+        try {
+            String verifyUrl = (publicBaseUrl == null ? "" : publicBaseUrl.replaceAll("/+$", ""))
+                    + "/verify-receipt?token="
+                    + java.net.URLEncoder.encode(receipt, java.nio.charset.StandardCharsets.UTF_8);
+            otpMailService.sendReceipt(voter.getEmail(), receipt, election.getName(), verifyUrl);
+        } catch (Exception mailEx) {
+            log.warn("Receipt mail dispatch failed (non-fatal): {}", mailEx.getMessage());
+        }
+
+        return resp;
     }
 
     private void auditVote(UserModel actor,

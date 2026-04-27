@@ -1,5 +1,6 @@
 package com.example.demo.RestController;
 
+import com.example.demo.DAO.ElectionListItem;
 import com.example.demo.DAO.ElectionRequest;
 import com.example.demo.DAO.ElectionUpdateRequest;
 import com.example.demo.Models.CandidateListModel;
@@ -92,8 +93,14 @@ public class AdminElectionController {
         return ResponseEntity.ok(electionAdminService.totalCandidates(electionId));
     }
 
+    /**
+     * Returns the org's elections enriched with eligible / cast / candidate
+     * counts so the listing UI can render "X eligible · Y cast" without
+     * fan-out queries from the client. Same access rules as the raw model
+     * variant — the service enforces org-scope.
+     */
     @GetMapping("/all/{orgId}")
-    public ResponseEntity<List<ElectionModel>> getAll(@PathVariable String orgId) {
-        return ResponseEntity.ok(electionAdminService.getAllElections(orgId));
+    public ResponseEntity<List<ElectionListItem>> getAll(@PathVariable String orgId) {
+        return ResponseEntity.ok(electionAdminService.getAllElectionsList(orgId));
     }
 }

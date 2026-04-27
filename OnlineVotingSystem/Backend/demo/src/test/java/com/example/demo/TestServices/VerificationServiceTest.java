@@ -8,6 +8,7 @@ import com.example.demo.Models.*;
 import com.example.demo.Repositories.ElectionModelRepository;
 import com.example.demo.Repositories.VoterListModelRepository;
 import com.example.demo.Service.OneTimeTokenService;
+import com.example.demo.Service.OtpMailService;
 import com.example.demo.Service.SafeAuditService;
 import com.example.demo.Service.UserInfoService;
 import com.example.demo.Service.VerificationService;
@@ -41,6 +42,8 @@ public class VerificationServiceTest {
     ElectionModelRepository electionRepo;
     @Mock
     OneTimeTokenService tokenService;
+    @Mock
+    OtpMailService otpMailService;
 
     @InjectMocks
     VerificationService verificationService;

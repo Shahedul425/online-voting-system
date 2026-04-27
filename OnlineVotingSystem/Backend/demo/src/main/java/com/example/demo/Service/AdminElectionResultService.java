@@ -12,6 +12,7 @@ import com.example.demo.Exception.ForbiddenException;
 import com.example.demo.Exception.NotFoundException;
 import com.example.demo.Models.ElectionModel;
 import com.example.demo.Models.UserModel;
+import com.example.demo.Models.VoteModel;
 import com.example.demo.Repositories.ElectionModelRepository;
 import com.example.demo.Repositories.VoteModelRepository;
 import com.example.demo.Repositories.VoteSelectionRepository;
@@ -20,6 +21,7 @@ import com.example.demo.Util.Ids;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -38,6 +40,9 @@ public class AdminElectionResultService {
     private final VoterListModelRepository voterRepo;
     private final UserInfoService userInfoService;
     private final SafeAuditService safeAuditService;
+
+    @Value("${ovs.public.base-url:http://localhost:5173}")
+    private String publicBaseUrl;
 
     public ElectionResultsResponse getAdminResults(String electionId) {
 
@@ -188,6 +193,44 @@ public class AdminElectionResultService {
         resp.setBallotsCast(ballotsCast);
 
         resp.setResultsByPosition(byPos);
+
+        // ───── NEW: fill margin fields on each winner row ──────────────────────
+        for (Map.Entry<String, List<CandidateResultRow>> e : byPos.entrySet()) {
+            List<CandidateResultRow> rows = e.getValue();
+            if (rows.size() < 2) continue;
+            CandidateResultRow winner = rows.get(0);
+            CandidateResultRow runnerUp = rows.get(1);
+            winner.setMarginOverRunnerUp(winner.getVotes() - runnerUp.getVotes());
+            winner.setMarginPercent(round2(winner.getVoteSharePercent() - runnerUp.getVoteSharePercent()));
+        }
+
+        // ───── NEW: publication-masthead fields ───────────────────────────────
+        List<VoteModel> votes = voteRepo.findByElectionOrdered(election.getId());
+
+        if (!votes.isEmpty()) {
+            resp.setFirstBallotAt(votes.get(0).getCreatedAt());
+            resp.setLastBallotAt(votes.get(votes.size() - 1).getCreatedAt());
+        }
+
+        // 24 hourly buckets (UTC hour-of-day).
+        long[] buckets = new long[24];
+        for (VoteModel v : votes) {
+            if (v.getCreatedAt() == null) continue;
+            int h = v.getCreatedAt().getHour();
+            if (h >= 0 && h < 24) buckets[h]++;
+        }
+        List<Long> timeline = new ArrayList<>(24);
+        int peak = 0;
+        for (int i = 0; i < 24; i++) {
+            timeline.add(buckets[i]);
+            if (buckets[i] > buckets[peak]) peak = i;
+        }
+        resp.setTurnoutTimeline(timeline);
+        resp.setPeakHour(String.format("%02d:00–%02d:00", peak, (peak + 1) % 24));
+
+        // Public verify URL
+        resp.setShareUrl(publicBaseUrl + "/verify-receipt?election=" + election.getId());
+
         return resp;
     }
 

@@ -9,4 +9,5 @@ public interface OrganizationServiceInterface {
      OrganizationModel findById(String id);
      String addOrganization(OrganizationRequest organization);
      String updateOrganization(OrganizationRequest organization);
+     List<OrganizationModel> allOrganizations();
 }

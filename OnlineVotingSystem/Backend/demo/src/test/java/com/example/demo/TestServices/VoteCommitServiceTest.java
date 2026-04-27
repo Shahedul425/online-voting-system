@@ -55,6 +55,10 @@ public class VoteCommitServiceTest {
     SafeAuditService safeAuditService;
     @Mock
     ReceiptService receiptService;
+    @Mock
+    com.example.demo.Service.MerkleTreeService merkleTreeService;
+    @Mock
+    com.example.demo.Service.OtpMailService otpMailService;
 
     @InjectMocks
     VoteCommitService voteCommitService;
@@ -211,6 +215,9 @@ public class VoteCommitServiceTest {
         existingVote.setReceiptHashToken("receipt-hash-token");
         existingVote.setCreatedAt(LocalDateTime.now());
         when(voteRepo.findByRequestId(voteRequest.getRequestId())).thenReturn(Optional.of(existingVote));
+        // Replay path also computes leafHash for the response; non-null byte[] is enough.
+        when(merkleTreeService.leafHashFromReceiptToken(anyString()))
+                .thenReturn(new byte[]{1, 2, 3, 4});
 
         VoteReceiptResponse out = voteCommitService.commitVote(voteRequest);
 
@@ -355,6 +362,9 @@ public class VoteCommitServiceTest {
         when(candidateRepo.findById(candidateId1)).thenReturn(Optional.of(candidate));
         when(receiptService.generateReceiptHash(any(UUID.class), anyString()))
                 .thenReturn("receipt-123");
+        // Real impl returns SHA-256 bytes; for unit test any non-null byte[] works.
+        when(merkleTreeService.leafHashFromReceiptToken(anyString()))
+                .thenReturn(new byte[]{1, 2, 3, 4});
 
         VoteReceiptResponse out = voteCommitService.commitVote(voteReq);
 

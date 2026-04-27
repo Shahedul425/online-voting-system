@@ -1,260 +1,200 @@
-// ✅ src/Components/Voter/ReceiptVerification/VerifyReceipt.jsx
-"use client";
-
-import React, { useMemo, useState } from "react";
+// src/pages/voter/ReceiptVerification.jsx
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, Loader2, CheckCircle2, XCircle, Copy, ArrowLeft } from "lucide-react";
-import { OVS } from "../../Service/Api/endpoints.js";
-import { toAppError } from "../../Service/ErrorHandling/appError.js";
-import { ErrorBanner } from "../Errors/ErrorBanner.jsx";
+import { Copy, Check, ShieldCheck, XCircle, CheckCircle2 } from "lucide-react";
+import { OVS } from "../../Service/Api/endpoints";
+import { toAppError } from "../../Service/ErrorHandling/appError";
+import { VoterShell } from "../layout/PubliceLayout";
+import { Panel, Btn, ErrorBanner, HintBox, Chip } from "../ui";
 
 function fmtDate(v) {
     if (!v) return "—";
     const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return "—";
-    return new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
+    return isNaN(d) ? "—" : new Intl.DateTimeFormat(undefined, {
+        day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
     }).format(d);
 }
 
-function shortHash(s, n = 10) {
-    if (!s) return "—";
-    const x = String(s);
-    if (x.length <= n * 2) return x;
-    return `${x.slice(0, n)}…${x.slice(-n)}`;
-}
-
-function pillClass(ok) {
-    const base = "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border";
-    return ok
-        ? `${base} bg-emerald-500/10 text-emerald-200 border-emerald-500/20`
-        : `${base} bg-red-500/10 text-red-200 border-red-500/20`;
-}
-
-export default function VerifyReceipt() {
+export default function ReceiptVerification() {
     const navigate = useNavigate();
 
-    const [receiptToken, setReceiptToken] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [token, setToken]       = useState("");
+    const [loading, setLoading]   = useState(false);
+    const [error, setError]       = useState(null);
+    const [result, setResult]     = useState(null); // VerifyReceiptResponse
+    const [copied, setCopied]     = useState(false);
 
-    const [result, setResult] = useState(null); // VerifyReceiptResponse
-
-    const canVerify = useMemo(() => receiptToken.trim().length > 10, [receiptToken]);
+    const canVerify = useMemo(() => token.trim().length > 10, [token]);
 
     async function verify() {
         setError(null);
         setResult(null);
-
-        const token = receiptToken.trim();
-        if (!token) return;
+        if (!token.trim()) return;
 
         setLoading(true);
-        const res = await OVS.verifyReceipt({ receiptToken: token });
+        // POST /public/receipt/verify → VerifyReceiptRequest { receiptToken }
+        const res = await OVS.verifyReceipt({ receiptToken: token.trim() });
         setLoading(false);
 
-        if (!res.ok) {
-            setError(toAppError(res));
-            return;
-        }
+        if (!res.ok) { setError(toAppError(res)); return; }
         setResult(res.data);
     }
 
-    async function copy(text) {
-        try {
-            await navigator.clipboard.writeText(text);
-        } catch {
-            // ignore
-        }
+    async function copyRoot() {
+        try { await navigator.clipboard.writeText(result?.merkleRootB64 ?? ""); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 px-4 py-10 text-white">
-            <div className="mx-auto w-full max-w-6xl">
-                <button
-                    onClick={() => navigate(-1)}
-                    className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white"
-                >
-                    <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-
-                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                            <ShieldCheck className="h-4 w-4 text-indigo-300" />
-                            <span className="text-sm text-white/80">Voter • Receipt Verification</span>
-                        </div>
-
-                        <h1 className="mt-4 text-3xl font-extrabold tracking-tight">Verify your vote</h1>
-                        <p className="mt-2 text-sm text-white/60 max-w-2xl">
-                            Paste your receipt token to confirm your vote was included in the published Merkle root for that election.
-                        </p>
+        <VoterShell wide>
+            <div className="flex items-start justify-between gap-4 flex-wrap animate-up">
+                <div>
+                    <div className="flex items-center gap-2 mb-2">
+                        <ShieldCheck size={18} style={{ color: "var(--purple)" }} />
+                        <span style={{ fontSize: 11.5, color: "var(--t3)" }}>Public · No login required</span>
                     </div>
-
-                    <button
-                        onClick={verify}
-                        disabled={!canVerify || loading}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold hover:bg-indigo-400 transition disabled:opacity-60"
-                    >
-                        {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
-                        Verify
-                    </button>
+                    <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--t1)" }}>Verify Your Vote</h1>
+                    <p style={{ fontSize: 12.5, color: "var(--t3)", marginTop: 4, maxWidth: 500 }}>
+                        Paste your receipt token to confirm it's included in the published Merkle root for that election.
+                    </p>
                 </div>
+                <Btn variant="primary" loading={loading} disabled={!canVerify} onClick={verify}>
+                    🔍 Verify →
+                </Btn>
+            </div>
 
-                <div className="mt-6">
-                    <ErrorBanner error={error} onClose={() => setError(null)} />
+            <ErrorBanner error={error} onClose={() => setError(null)} />
+
+            {/* Input */}
+            <Panel title="Receipt Token" subtitle="POST /public/receipt/verify · VerifyReceiptRequest" className="animate-up-2">
+                <div className="flex flex-col gap-3">
+          <textarea
+              value={token}
+              onChange={e => { setToken(e.target.value); setResult(null); setError(null); }}
+              placeholder="Paste receipt token here (payload.signature)"
+              rows={4}
+              style={{
+                  background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8,
+                  padding: "10px 14px", color: "var(--t1)", fontSize: 11, fontFamily: "JetBrains Mono",
+                  outline: "none", width: "100%", resize: "vertical",
+              }}
+              onFocus={e => (e.target.style.borderColor = "var(--purple-b)")}
+              onBlur={e  => (e.target.style.borderColor = "var(--border)")}
+          />
+                    <HintBox type="info">
+                        The election ID is embedded and signed inside the token — no need to provide it separately.
+                        The token was issued when you cast your ballot via <span className="mono">POST /voter/vote/cast</span>.
+                    </HintBox>
+                    <div className="flex justify-end">
+                        <Btn variant="primary" loading={loading} disabled={!canVerify} onClick={verify}>
+                            🔍 Verify →
+                        </Btn>
+                    </div>
                 </div>
+            </Panel>
 
-                {/* Input */}
-                <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
-                    <label className="text-xs text-white/60">Receipt token</label>
-                    <div className="mt-2 flex items-start gap-2">
-            <textarea
-                value={receiptToken}
-                onChange={(e) => setReceiptToken(e.target.value)}
-                placeholder="Paste receipt token here (payload.signature)"
-                rows={4}
-                className="w-full resize-none rounded-2xl border border-white/10 bg-zinc-900/40 px-3 py-3 text-sm outline-none focus:border-indigo-400/60 placeholder:text-white/30"
-            />
-                        <button
-                            type="button"
-                            onClick={() => copy(receiptToken.trim())}
-                            className="shrink-0 rounded-xl border border-white/10 bg-white/5 p-3 hover:bg-white/10"
-                            title="Copy token"
+            {/* Result */}
+            {result && (
+                <div className="grid gap-4 animate-up-2" style={{ gridTemplateColumns: "1fr 280px" }}>
+                    {/* Left */}
+                    <div className="flex flex-col gap-4">
+                        {/* Verdict */}
+                        <div
+                            className="rounded-xl p-4"
+                            style={{
+                                background: result.included ? "var(--green-d)" : "var(--red-d)",
+                                border: `1px solid ${result.included ? "var(--green-b)" : "rgba(247,111,111,.2)"}`,
+                            }}
                         >
-                            <Copy className="h-4 w-4 text-white/70" />
-                        </button>
-                    </div>
-
-                    <div className="mt-3 text-xs text-white/45">
-                        Tip: you can store this token locally. You don’t need to provide electionId — it’s embedded and signed.
-                    </div>
-                </div>
-
-                {/* Result */}
-                {result ? (
-                    <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-                        {/* Left: status */}
-                        <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="min-w-0">
-                                    <div className="text-sm font-semibold text-white/80">Verification result</div>
-                                    <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <span className={pillClass(!!result.included)}>
-                      {result.included ? "Included in Merkle root" : "Not included"}
-                    </span>
-                                        {result.included ? (
-                                            <CheckCircle2 className="h-5 w-5 text-emerald-300" />
-                                        ) : (
-                                            <XCircle className="h-5 w-5 text-red-300" />
-                                        )}
+                            <div className="flex items-center gap-3">
+                                {result.included
+                                    ? <CheckCircle2 size={22} style={{ color: "var(--green)", flexShrink: 0 }} />
+                                    : <XCircle     size={22} style={{ color: "var(--red)",   flexShrink: 0 }} />
+                                }
+                                <div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: result.included ? "var(--green)" : "var(--red)" }}>
+                                        {result.included ? "Included in Merkle root" : "Not included"}
                                     </div>
-
-                                    <div className="mt-4 text-sm text-white/60">
+                                    <div style={{ fontSize: 12, color: "var(--t2)", marginTop: 3 }}>
                                         {result.included
-                                            ? "✅ Your receipt is proven to be part of the published election commitment."
+                                            ? "✅ Your receipt is cryptographically proven to be part of the published election commitment."
                                             : "❌ This receipt could not be proven against the published commitment."}
                                     </div>
                                 </div>
-
-                                <button
-                                    onClick={() => {
-                                        setResult(null);
-                                        setError(null);
-                                    }}
-                                    className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm hover:bg-white/10"
-                                >
-                                    Clear
-                                </button>
-                            </div>
-
-                            <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <InfoCard label="Election" value={result.electionName || "—"} />
-                                <InfoCard label="Voted at" value={fmtDate(result.votedAt)} />
-                                <InfoCard label="Election ID" value={result.electionId || "—"} mono />
-                                <InfoCard label="Organization ID" value={result.organizationId || "—"} mono />
-                            </div>
-
-                            <div className="mt-6 rounded-2xl border border-white/10 bg-zinc-900/30 p-5">
-                                <div className="flex items-center justify-between gap-3">
-                                    <div className="text-sm font-semibold text-white/80">Merkle commitment</div>
-                                    <button
-                                        onClick={() => copy(result.merkleRootB64 || "")}
-                                        className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs hover:bg-white/10"
-                                    >
-                                        <Copy className="h-3.5 w-3.5" />
-                                        Copy root
-                                    </button>
-                                </div>
-
-                                <div className="mt-3 text-xs text-white/60">
-                                    Root (base64url):{" "}
-                                    <span className="font-mono text-white/80 break-all">{result.merkleRootB64 || "—"}</span>
-                                </div>
-
-                                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/60">
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
-                    Leaf index: <span className="text-white/80 font-semibold">{result.leafIndex ?? "—"}</span>
-                  </span>
-                                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
-                    Tree depth: <span className="text-white/80 font-semibold">{result.treeDepth ?? "—"}</span>
-                  </span>
-                                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1">
-                    Proof steps:{" "}
-                                        <span className="text-white/80 font-semibold">{result.proof?.length ?? 0}</span>
-                  </span>
-                                </div>
+                                <Btn variant="ghost" size="sm" onClick={() => { setResult(null); setToken(""); }} className="ml-auto">Clear</Btn>
                             </div>
                         </div>
 
-                        {/* Right: proof (optional but useful) */}
-                        <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur h-fit lg:sticky lg:top-6">
-                            <div className="text-sm font-semibold text-white/80">Proof path</div>
-                            <p className="mt-2 text-xs text-white/50">
-                                These are sibling hashes used to recompute the root. You can verify locally if you want.
-                            </p>
-
-                            {!Array.isArray(result.proof) || result.proof.length === 0 ? (
-                                <div className="mt-5 text-sm text-white/50">No proof returned.</div>
-                            ) : (
-                                <div className="mt-5 space-y-3">
-                                    {result.proof.map((p, i) => (
-                                        <div key={i} className="rounded-xl border border-white/10 bg-zinc-900/30 p-3">
-                                            <div className="flex items-center justify-between">
-                                                <div className="text-xs text-white/50">Step {i + 1}</div>
-                                                <span className="text-[11px] rounded-full border border-white/10 bg-white/5 px-2 py-1 text-white/60">
-                          {p.leftSibling ? "Left sibling" : "Right sibling"}
-                        </span>
-                                            </div>
-                                            <div className="mt-2 font-mono text-[11px] break-all text-white/75">
-                                                {p.siblingHash}
-                                            </div>
-                                            <div className="mt-2 text-[11px] text-white/45">
-                                                {shortHash(p.siblingHash, 12)}
-                                            </div>
+                        {/* Details */}
+                        <Panel title="Verification Details">
+                            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                                {[
+                                    ["Election",        result.electionName || "—",       false],
+                                    ["Voted at",        fmtDate(result.votedAt),           false],
+                                    ["Election ID",     result.electionId || "—",          true],
+                                    ["Organization ID", result.organizationId || "—",      true],
+                                ].map(([l, v, mono]) => (
+                                    <div key={l} className="rounded-xl px-4 py-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                                        <div style={{ fontSize: 10.5, color: "var(--t3)", marginBottom: 4 }}>{l}</div>
+                                        <div style={{ fontSize: mono ? 11 : 12.5, fontFamily: mono ? "JetBrains Mono" : "inherit", fontWeight: 600, color: "var(--t1)", wordBreak: "break-all" }}>
+                                            {String(v)}
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </Panel>
+
+                        {/* Merkle commitment */}
+                        <Panel title="Merkle Commitment" action={
+                            <Btn variant="ghost" size="sm" onClick={copyRoot}>
+                                {copied ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Copy root</>}
+                            </Btn>
+                        }>
+                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--t3)", marginBottom: 6 }}>
+                                merkleRootB64
+                            </div>
+                            <div style={{ fontSize: 10, fontFamily: "JetBrains Mono", color: "var(--cyan)", wordBreak: "break-all", lineHeight: 1.7, marginBottom: 12 }}>
+                                {result.merkleRootB64 || "—"}
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {[
+                                    ["Leaf index",   result.leafIndex  ?? "—"],
+                                    ["Tree depth",   result.treeDepth  ?? "—"],
+                                    ["Proof steps",  result.proof?.length ?? 0],
+                                ].map(([l, v]) => (
+                                    <Chip key={l} variant="purple">{l}: {v}</Chip>
+                                ))}
+                            </div>
+                        </Panel>
                     </div>
-                ) : null}
-            </div>
-        </div>
+
+                    {/* Right: proof path */}
+                    <Panel title="Proof Path" subtitle={`${result.proof?.length ?? 0} steps`} className="h-fit sticky top-4">
+                        <p style={{ fontSize: 11.5, color: "var(--t3)", marginBottom: 12 }}>
+                            Sibling hashes used to recompute the root from your leaf. You can verify locally.
+                        </p>
+                        {!Array.isArray(result.proof) || result.proof.length === 0 ? (
+                            <div style={{ fontSize: 12, color: "var(--t3)" }}>No proof returned.</div>
+                        ) : (
+                            <div className="flex flex-col gap-2">
+                                {result.proof.map((p, i) => (
+                                    <div key={i} className="rounded-lg px-3 py-2.5" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                                        <div className="flex items-center justify-between mb-2">
+                      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", color: "var(--t3)" }}>
+                        Step {i + 1}
+                      </span>
+                                            <Chip variant={p.leftSibling ? "cyan" : "purple"} >{p.leftSibling ? "Left sibling" : "Right sibling"}</Chip>
+                                        </div>
+                                        <div style={{ fontSize: 9, fontFamily: "JetBrains Mono", color: "var(--t2)", wordBreak: "break-all", lineHeight: 1.6 }}>
+                                            {p.siblingHash}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </Panel>
+                </div>
+            )}
+        </VoterShell>
     );
 }
 
-function InfoCard({ label, value, mono }) {
-    return (
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/30 p-4">
-            <div className="text-xs text-white/50">{label}</div>
-            <div className={["mt-1 text-sm text-white/85", mono ? "font-mono text-xs break-all" : ""].join(" ")}>
-                {value}
-            </div>
-        </div>
-    );
-}

@@ -176,9 +176,21 @@ public class MerkleTreeService {
         response.setOrganizationId(electionModel.getOrganization().getId());
         response.setVotedAt(idx.getVotedAt());
         response.setMerkleRootB64(electionModel.getMerkleRoot());
+        response.setLeafHashB64(Base64.getUrlEncoder().withoutPadding().encodeToString(receiptKeyHash));
         response.setLeafIndex(leafIndex);
         response.setTreeDepth(proofDTOS.size());
         response.setProof(proofDTOS);
+
+        // ───── NEW: frontend-friendly proof path ─────────────────────────────
+        List<VerifyReceiptResponse.ProofNode> proofPath = new ArrayList<>();
+        for (MerkleProofDTO step : proofDTOS) {
+            VerifyReceiptResponse.ProofNode node = new VerifyReceiptResponse.ProofNode();
+            node.setHash(step.getSiblingHash());
+            node.setSide(step.isLeftSibling() ? "L" : "R");
+            proofPath.add(node);
+        }
+        response.setProofPath(proofPath);
+
         return response;
     }
 
