@@ -125,8 +125,12 @@ services:
       dockerfile: Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://host.docker.internal:8081/realms/OVS-System
-      KEYCLOAK_BASE_URL: http://host.docker.internal:8081
+      # Issuer claim check — must match what the browser's token carries
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:8081/realms/OVS-System
+      # JWKS fetch — must be reachable from inside the app container
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/OVS-System/protocol/openid-connect/certs
+      # Keycloak admin API calls stay on the internal network
+      KEYCLOAK_BASE_URL: http://keycloak:8080
       KEYCLOAK_REALM: OVS-System
       KEYCLOAK_CLIENT_ID: ovs_frontend
       SPRING_DATASOURCE_URL: jdbc:postgresql://app_db:5432/ovsApp

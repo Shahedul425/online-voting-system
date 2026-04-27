@@ -18,6 +18,11 @@ public interface VoterListModelRepository extends JpaRepository<VoterListModel, 
     boolean existsByElectionIdAndEmail(UUID electionId, String email);
     long countByElection_Id(UUID electionId);
     Optional<VoterListModel> findByElectionIdAndVoterIdAndEmail(UUID electionId, String voterId, String email);
+
+    // Used by the new email-driven verification flow — voters don't need to
+    // remember the voter-list ID assigned to them at upload time; we resolve
+    // it by their JWT email instead.
+    Optional<VoterListModel> findByElectionIdAndEmailIgnoreCase(UUID electionId, String email);
 //    List<VoterListModel> findByElectionId(UUID electionId);
     // If you want: list voters by election
     @Query("SELECT v FROM VoterListModel v WHERE v.election.id = :electionId")

@@ -1,80 +1,107 @@
-"use client";
-import { ShieldCheck, Vote, IdCard, CheckCircle2, HelpCircle, Clock } from "lucide-react";
-import {useNavigate} from "react-router-dom";
-// import keycloak from "../../Service/Auth/Keycloak.js";
+// src/pages/voter/Introduction.jsx
+import { useNavigate } from "react-router-dom";
+import { ShieldCheck, Vote, IdCard, CheckCircle2, Lock, Clock } from "lucide-react";
+import { PublicNavbar } from "../layout/PubliceLayout";
+import { Btn } from "../ui";
+
+const FEATURES = [
+    { icon: <IdCard size={22} />,        title: "Easy ID Verification",     sub: "Verify identity with your voter ID" },
+    { icon: <Vote size={22} />,          title: "Simple Ballot Selection",  sub: "Pick one candidate per position" },
+    { icon: <ShieldCheck size={22} />,   title: "Cryptographic Proof",      sub: "Merkle tree seals every ballot" },
+    { icon: <CheckCircle2 size={22} />,  title: "Instant Receipt",          sub: "Verify your vote was counted" },
+    { icon: <Lock size={22} />,          title: "Full Audit Trail",         sub: "Every action logged immutably" },
+    { icon: <Clock size={22} />,         title: "Vote Any Time",            sub: "Open 24/7 during election window" },
+];
+
 export default function Introduction() {
-    // const handleLogin = () => {
-    //     keycloak.login();
-    // };
     const navigate = useNavigate();
     return (
-        <div className="h-screen bg-gray-950 text-white flex flex-col overflow-hidden">
-
-            {/* Header */}
-            <header className="flex justify-between items-center px-6 py-4 border-b border-white/5">
-                <div className="flex items-center gap-2">
-                    <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center text-lg font-bold">
-                        OVS
-                    </div>
-                    <span className="font-semibold text-sm tracking-wide text-gray-200">
-            Online Voting System
-          </span>
-                </div>
-
-                <button onClick={()=>navigate("/signin")} className="bg-indigo-600 hover:bg-indigo-500 transition-all px-5 py-2 rounded-lg text-sm font-semibold shadow">
-                    Login
-                </button>
-            </header>
+        <div className="min-h-screen flex flex-col" style={{ background: "var(--bg)" }}>
+            <PublicNavbar />
 
             {/* Hero */}
-            <main className="flex flex-col justify-center items-center text-center px-6 flex-grow">
+            <main className="flex-1 flex flex-col items-center justify-center text-center px-6 py-12 relative overflow-hidden">
+                {/* ambient glow */}
+                <div
+                    className="absolute pointer-events-none"
+                    style={{
+                        top: -120, left: "50%", transform: "translateX(-50%)",
+                        width: 600, height: 600, borderRadius: "50%",
+                        background: "radial-gradient(circle, rgba(124,111,247,.1) 0%, transparent 70%)",
+                    }}
+                />
 
-                <h1 className="text-3xl sm:text-5xl font-extrabold text-white">
-                    Cast Your Vote with Confidence
+                {/* Tag */}
+                <div
+                    className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-5 animate-up"
+                    style={{ background: "var(--purple-d)", border: "1px solid var(--purple-b)", fontSize: 11.5, fontWeight: 600, color: "var(--purple)" }}
+                >
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--green)", display: "inline-block" }} />
+                    Secure · Transparent · Verified
+                </div>
+
+                {/* Headline */}
+                <h1
+                    className="animate-up-2"
+                    style={{ fontSize: 42, fontWeight: 700, color: "var(--t1)", lineHeight: 1.15, letterSpacing: "-.02em", maxWidth: 580 }}
+                >
+                    Cast Your Vote with{" "}
+                    <span style={{ background: "linear-gradient(135deg, var(--purple), var(--cyan))", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
+            Confidence
+          </span>
                 </h1>
 
-                <p className="text-indigo-300 text-sm mt-3 font-semibold italic">
-                    "Your vote. Your right. Your future."
+                <p
+                    className="animate-up-2"
+                    style={{ fontSize: 14, color: "var(--t3)", marginTop: 14, maxWidth: 440, lineHeight: 1.7 }}
+                >
+                    A modern, tamper-proof digital voting platform built for organizations that care about democratic integrity.
                 </p>
 
-                <p className="text-gray-400 text-sm sm:text-base mt-3 max-w-md">
-                    Fast, secure, and transparent digital voting.
-                    Your voice matters — make it count.
-                </p>
+                <div className="flex gap-3 mt-7 justify-center flex-wrap animate-up-3">
+                    <Btn variant="primary" size="lg" onClick={() => navigate("/signin")}>Get Started →</Btn>
+                    <Btn variant="ghost"   size="lg" onClick={() => navigate("/verify/receipt")}>Verify a Receipt</Btn>
+                </div>
 
-                {/* Voter-focused Features */}
-                <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-2xl">
-
-                    <Feature icon={<IdCard size={28} />} title="Easy ID Verification" />
-                    <Feature icon={<Vote size={28} />} title="Simple Ballot Selection" />
-                    <Feature icon={<ShieldCheck size={28} />} title="Your Vote Is Secure" />
-                    <Feature icon={<CheckCircle2 size={28} />} title="Instant Confirmation" />
-                    <Feature icon={<HelpCircle size={28} />} title="Guided Steps" />
-                    <Feature icon={<Clock size={28} />} title="No Waiting, Vote Anytime" />
-
+                {/* Feature grid */}
+                <div
+                    className="grid grid-cols-3 gap-3 mt-12 w-full animate-up-4"
+                    style={{ maxWidth: 640 }}
+                >
+                    {FEATURES.map(f => (
+                        <div
+                            key={f.title}
+                            className="rounded-xl p-4 text-center transition-all"
+                            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = "var(--purple-b)"}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}
+                        >
+                            <div style={{ color: "var(--purple)", marginBottom: 8, display: "flex", justifyContent: "center" }}>{f.icon}</div>
+                            <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--t1)" }}>{f.title}</div>
+                            <div style={{ fontSize: 11, color: "var(--t3)", marginTop: 3 }}>{f.sub}</div>
+                        </div>
+                    ))}
                 </div>
             </main>
 
             {/* Footer */}
-            <footer className="flex flex-col items-center border-t border-white/10 py-4 text-xs text-gray-400">
-                <div className="flex gap-6 mb-1">
-                    <button className="hover:text-white transition">Privacy</button>
-                    <button className="hover:text-white transition">Terms</button>
-                    <button className="hover:text-white transition">Help</button>
-                    <button className="hover:text-white transition">Contact</button>
+            <footer
+                className="flex items-center justify-between px-6 py-4 flex-shrink-0"
+                style={{ background: "var(--surface)", borderTop: "1px solid var(--border)" }}
+            >
+        <span style={{ fontSize: 11.5, color: "var(--t3)" }}>
+          © {new Date().getFullYear()} OVS — Your vote is protected
+        </span>
+                <div className="flex gap-5">
+                    {["Privacy", "Terms", "Help", "Contact"].map(l => (
+                        <span key={l} style={{ fontSize: 11.5, color: "var(--t3)", cursor: "pointer" }}
+                              onMouseEnter={e => e.currentTarget.style.color = "var(--t2)"}
+                              onMouseLeave={e => e.currentTarget.style.color = "var(--t3)"}>
+              {l}
+            </span>
+                    ))}
                 </div>
-                <p>© {new Date().getFullYear()} OVS — Your Vote Is Protected</p>
             </footer>
-
-        </div>
-    );
-}
-
-function Feature({ icon, title }) {
-    return (
-        <div className="bg-gray-900/60 border border-gray-800 rounded-xl py-4 px-3 flex flex-col items-center justify-center hover:border-indigo-500/40 hover:bg-gray-900 transition shadow-sm">
-            <div className="text-indigo-400 mb-2">{icon}</div>
-            <p className="text-white font-medium text-sm text-center">{title}</p>
         </div>
     );
 }

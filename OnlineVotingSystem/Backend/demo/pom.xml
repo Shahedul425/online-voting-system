@@ -96,6 +96,14 @@
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
 		</dependency>
 
+		<!-- Outbound mail (OTP delivery, password-reset stubs). When SMTP env
+		     vars are absent the auto-configured JavaMailSender still loads, but
+		     OtpMailService is built to fail-soft and just log if it can't send. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>

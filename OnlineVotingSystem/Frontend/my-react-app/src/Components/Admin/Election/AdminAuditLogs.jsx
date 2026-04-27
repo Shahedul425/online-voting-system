@@ -1,582 +1,294 @@
-import React, { useEffect, useMemo, useState } from "react";
+// src/Components/Admin/Audit/AdminAuditLogs.jsx
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import {
-    ShieldCheck,
-    Loader2,
-    Search,
-    ArrowLeft,
-    User,
-    Building2,
-    Fingerprint,
-    CalendarClock,
-} from "lucide-react";
+import { Search, ArrowLeft, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react";
 import { OVS } from "../../../Service/Api/endpoints";
+import { useAppStore } from "../../../Service/GlobalState/appStore";
 import { toAppError } from "../../../Service/ErrorHandling/appError";
-import { ErrorBanner } from "../../Errors/ErrorBanner";
+import AdminLayout from "../../../components/layout/AdminLayout";
+import {
+    Panel, ErrorBanner, Spinner, EmptyState, Btn, HintBox, Chip,
+} from "../../../components/ui";
 
-function toIsoOrNull(datetimeLocalValue) {
-    if (!datetimeLocalValue) return null;
-    try {
-        const d = new Date(datetimeLocalValue);
-        if (Number.isNaN(d.getTime())) return null;
-        return d.toISOString();
-    } catch {
-        return null;
-    }
-}
+const STATUS_COLORS = {
+    success: { bg: "var(--green-d)",  color: "var(--green)",  border: "var(--green-b)" },
+    failed:  { bg: "var(--red-d)",    color: "var(--red)",    border: "rgba(247,111,111,.2)" },
+    rejected:{ bg: "var(--orange-d)", color: "var(--orange)", border: "rgba(247,166,77,.2)" },
+};
 
-function fmtDate(v) {
-    if (!v) return "—";
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return "—";
-    return new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    }).format(d);
-}
-
-const uuidRegex =
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isUuid(v) {
-    return uuidRegex.test((v || "").trim());
-}
-
-function statusPill(s) {
-    const v = String(s || "").toUpperCase();
-    const base =
-        "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border";
-    if (v === "SUCCESS")
-        return `${base} bg-emerald-500/10 text-emerald-200 border-emerald-500/20`;
-    if (v === "FAILED")
-        return `${base} bg-red-500/10 text-red-200 border-red-500/20`;
-    if (v === "REJECTED")
-        return `${base} bg-amber-500/10 text-amber-200 border-amber-500/20`;
-    return `${base} bg-white/5 text-white/70 border-white/10`;
-}
-
-function actionPill() {
-    return "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border bg-indigo-500/10 text-indigo-200 border-indigo-400/20";
-}
-
-function rolePill(role) {
-    const r = String(role || "").toUpperCase();
-    const base =
-        "inline-flex items-center rounded-full px-2 py-1 text-[11px] font-semibold border";
-    if (r === "ADMIN")
-        return `${base} bg-fuchsia-500/10 text-fuchsia-200 border-fuchsia-500/20`;
-    if (r === "SUPERADMIN")
-        return `${base} bg-purple-500/10 text-purple-200 border-purple-500/20`;
-    if (r === "VOTER")
-        return `${base} bg-sky-500/10 text-sky-200 border-sky-500/20`;
-    return `${base} bg-white/5 text-white/70 border-white/10`;
-}
-
-function smallKV(label, value, Icon) {
+function AuditStatus({ status }) {
+    const s   = String(status || "").toLowerCase();
+    const cfg = STATUS_COLORS[s] ?? STATUS_COLORS.success;
     return (
-        <div className="rounded-xl border border-white/10 bg-zinc-900/30 p-3">
-            <div className="flex items-center gap-2 text-xs text-white/50">
-                {Icon ? <Icon className="h-3.5 w-3.5 text-white/40" /> : null}
-                <span>{label}</span>
-            </div>
-            <div className="mt-1 text-sm font-semibold break-words">
-                {value || "—"}
-            </div>
-        </div>
+        <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 9px", borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.border}` }}>
+      {status}
+    </span>
     );
 }
 
-function monoKV(label, value, Icon) {
+function ActionChip({ action }) {
     return (
-        <div className="rounded-xl border border-white/10 bg-zinc-900/30 p-3">
-            <div className="flex items-center gap-2 text-xs text-white/50">
-                {Icon ? <Icon className="h-3.5 w-3.5 text-white/40" /> : null}
-                <span>{label}</span>
-            </div>
-            <div className="mt-1 font-mono text-xs text-white/75 break-all">
-                {value || "—"}
-            </div>
-        </div>
+        <span style={{ display: "inline-flex", padding: "2px 8px", borderRadius: 20, fontSize: 10.5, fontWeight: 600, background: "var(--purple-d)", color: "var(--purple)", border: "1px solid var(--purple-b)" }}>
+      {action}
+    </span>
     );
 }
 
 export default function AdminAuditLogs() {
-    const navigate = useNavigate();
     const { electionId } = useParams();
+    const navigate        = useNavigate();
+    const election        = useAppStore(s => s.election);
 
-    // Filters
-    const [actorId, setActorId] = useState("");
-    const [action, setAction] = useState("");
-    const [status, setStatus] = useState("");
-    const [from, setFrom] = useState("");
-    const [to, setTo] = useState("");
+    const [filters, setFilters] = useState({ action: "", status: "", actorId: "", from: "", to: "" });
+    const [page,    setPage]    = useState(0);
+    const [size,    setSize]    = useState(20);
+    const [rows,    setRows]    = useState([]);
+    const [total,   setTotal]   = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [error,   setError]   = useState(null);
+    const [selected, setSelected] = useState(null); // selected audit detail
+    const [detail,   setDetail]   = useState(null); // loaded detail
+    const [loadingDetail, setLoadingDetail] = useState(false);
+    const [filterOpen, setFilterOpen] = useState(true);
 
-    // Paging
-    const [page, setPage] = useState(0);
-    const [size, setSize] = useState(20);
-
-    // Data
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-
-    const [items, setItems] = useState([]);
-    const [totalPages, setTotalPages] = useState(0);
-    const [totalElements, setTotalElements] = useState(0);
-
-    // Detail
-    const [selectedId, setSelectedId] = useState(null);
-    const [detail, setDetail] = useState(null);
-    const [detailLoading, setDetailLoading] = useState(false);
-
-    const actorUuidOrNull = useMemo(
-        () => (isUuid(actorId) ? actorId.trim() : null),
-        [actorId]
-    );
-
-    async function runSearch(nextPage = 0) {
-        setError(null);
-        setDetail(null);
-        setSelectedId(null);
-
-        if (!electionId) {
-            setError(
-                toAppError({
-                    status: 400,
-                    code: "NO_ELECTION",
-                    message: "Missing electionId in URL.",
-                })
-            );
-            return;
-        }
-
-        const payload = {
+    async function search(pg = 0) {
+        if (!electionId) return;
+        setLoading(true); setError(null);
+        // POST /audit/search → AuditSearchRequest → Page<AuditLogsModel>
+        const res = await OVS.auditSearch({
             electionId,
-            actorId: actorUuidOrNull,
-            action: action.trim() || null,
-            status: status.trim() || null,
-            from: toIsoOrNull(from),
-            to: toIsoOrNull(to),
-            page: nextPage,
-            size: Number(size) || 20,
-            sortBy: "createdAt",
-            direction: "DESC",
-        };
-
-        setLoading(true);
-        const res = await OVS.auditSearch(payload);
+            actorId:  filters.actorId || null,
+            action:   filters.action  || null,
+            status:   filters.status  || null,
+            from:     filters.from    ? new Date(filters.from).toISOString() : null,
+            to:       filters.to      ? new Date(filters.to).toISOString()   : null,
+            page:     pg,
+            size,
+        });
         setLoading(false);
-
-        if (!res.ok) {
-            setError(toAppError(res));
-            return;
-        }
-
-        setItems(res.data?.content ?? []);
-        setTotalPages(res.data?.totalPages ?? 0);
-        setTotalElements(res.data?.totalElements ?? 0);
-        setPage(res.data?.number ?? nextPage);
+        if (!res.ok) { setError(toAppError(res)); return; }
+        const data = res.data;
+        setRows(Array.isArray(data) ? data : (data?.content ?? []));
+        setTotal(typeof data?.totalElements === "number" ? data.totalElements : (Array.isArray(data) ? data.length : 0));
     }
 
-    async function openDetail(auditId, e) {
-        e?.preventDefault?.();
-        e?.stopPropagation?.();
+    useEffect(() => { search(0); }, [electionId, size]);
 
-        setError(null);
-        setSelectedId(auditId);
-        setDetail(null);
+    function onFilter(e) { setFilters(p => ({ ...p, [e.target.name]: e.target.value })); }
 
-        setDetailLoading(true);
-        const res = await OVS.auditGetOne({ electionId, auditId });
-        setDetailLoading(false);
-
-        if (!res.ok) {
-            setError(toAppError(res));
-            return;
-        }
-
-        setDetail(res.data);
-        console.log(detail)
+    async function selectRow(row) {
+        setSelected(row);
+        // GET /audit/{electionId}/{auditId}
+        if (!row?.id || !electionId) return;
+        setLoadingDetail(true);
+        const res = await OVS.getAuditDetail({ electionId, auditId: row.id });
+        setLoadingDetail(false);
+        if (res.ok) setDetail(res.data);
+        else setDetail(null);
     }
 
-    useEffect(() => {
-        if (electionId) runSearch(0);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [electionId]);
-
-    // pagination buttons: show 1..N (max 7)
-    const pageButtons = useMemo(() => {
-        const tp = totalPages || 0;
-        if (tp <= 1) return [0];
-        const cur = page;
-        const max = 7;
-
-        let start = Math.max(0, cur - 3);
-        let end = Math.min(tp - 1, start + (max - 1));
-        start = Math.max(0, end - (max - 1));
-
-        const arr = [];
-        for (let i = start; i <= end; i++) arr.push(i);
-        return arr;
-    }, [page, totalPages]);
-
-    // Safe helpers for detail object
-    const actor = detail?.actor;
-    const org = detail?.organization ?? actor?.organization ?? detail?.election?.organization;
-    const election = detail?.election;
+    const totalPages = Math.max(1, Math.ceil(total / size));
+    const fmtDate    = v => { try { return new Date(v).toLocaleString(); } catch { return "—"; } };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 px-4 py-10 text-white">
-            <div className="mx-auto w-full max-w-7xl">
-                <button
-                    onClick={() => navigate(-1)}
-                    className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white"
-                >
-                    <ArrowLeft className="h-4 w-4" /> Back
-                </button>
-
-                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                            <ShieldCheck className="h-4 w-4 text-indigo-300" />
-                            <span className="text-sm text-white/80">Admin • Audit Logs</span>
-                        </div>
-
-                        <h1 className="mt-4 text-3xl font-extrabold tracking-tight">
-                            Audit
-                        </h1>
-                        <p className="mt-2 text-sm text-white/60">
-                            Election: <span className="font-mono">{electionId || "—"}</span>
-                        </p>
+        <AdminLayout
+            breadcrumbs={[
+                { label: "Admin",     path: "/admin" },
+                { label: election?.name || electionId, path: `/admin/elections/${electionId}` },
+                { label: "Audit Logs" },
+            ]}
+            topbarRight={
+                <Btn variant="ghost" size="sm" onClick={() => navigate(`/admin/elections/${electionId}`)}>
+                    <ArrowLeft size={12} /> Workspace
+                </Btn>
+            }
+        >
+            <div className="flex items-start justify-between flex-wrap gap-3 animate-up">
+                <div>
+                    <div className="flex items-center gap-2 mb-1">
+                        <ShieldCheck size={15} style={{ color: "var(--purple)" }} />
+                        <span style={{ fontSize: 11.5, color: "var(--t3)" }}>Admin · Election · Audit Logs</span>
                     </div>
-
-                    <button
-                        onClick={() => runSearch(0)}
-                        disabled={loading}
-                        className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-500 px-4 py-3 text-sm font-semibold hover:bg-indigo-400 transition disabled:opacity-60"
-                    >
-                        {loading ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                            <Search className="h-4 w-4" />
-                        )}
-                        Search
-                    </button>
+                    <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--t1)" }}>Audit Logs</h1>
+                    <p style={{ fontSize: 12.5, color: "var(--t3)", marginTop: 4 }}>
+                        {election?.name || electionId} · {total.toLocaleString()} records
+                    </p>
                 </div>
-
-                <div className="mt-6">
-                    <ErrorBanner error={error} onClose={() => setError(null)} />
-                </div>
-
-                {/* Filters */}
-                <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-                        <div>
-                            <label className="text-xs text-white/60">Actor ID (UUID)</label>
-                            <input
-                                value={actorId}
-                                onChange={(e) => setActorId(e.target.value)}
-                                placeholder="optional"
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2 text-sm outline-none focus:border-indigo-400/60"
-                            />
-                            {actorId && !isUuid(actorId) ? (
-                                <p className="mt-2 text-xs text-amber-300">
-                                    Must be a valid UUID.
-                                </p>
-                            ) : null}
-                        </div>
-
-                        <div>
-                            <label className="text-xs text-white/60">Action</label>
-                            <input
-                                value={action}
-                                onChange={(e) => setAction(e.target.value)}
-                                placeholder="e.g. VOTE_CAST"
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2 text-sm outline-none focus:border-indigo-400/60"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="text-xs text-white/60">Status</label>
-                            <input
-                                value={status}
-                                onChange={(e) => setStatus(e.target.value)}
-                                placeholder="SUCCESS / FAILED"
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2 text-sm outline-none focus:border-indigo-400/60"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="text-xs text-white/60">From</label>
-                            <input
-                                type="datetime-local"
-                                value={from}
-                                onChange={(e) => setFrom(e.target.value)}
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2 text-sm outline-none focus:border-indigo-400/60"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="text-xs text-white/60">To</label>
-                            <input
-                                type="datetime-local"
-                                value={to}
-                                onChange={(e) => setTo(e.target.value)}
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2 text-sm outline-none focus:border-indigo-400/60"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="text-xs text-white/50">
-                            Total:{" "}
-                            <span className="font-semibold text-white/70">
-                {totalElements}
-              </span>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                            <div className="text-xs text-white/60">Size</div>
-                            <input
-                                type="number"
-                                min={1}
-                                max={200}
-                                value={size}
-                                onChange={(e) => setSize(e.target.value)}
-                                className="w-24 rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2 text-sm outline-none focus:border-indigo-400/60"
-                            />
-                        </div>
-                    </div>
-                </div>
-
-                {/* List + Detail */}
-                <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-                    {/* LIST */}
-                    <div className="lg:col-span-2 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
-                        {loading ? (
-                            <div className="flex items-center justify-center gap-2 py-16 text-white/70">
-                                <Loader2 className="h-5 w-5 animate-spin" />
-                                Loading audit logs...
-                            </div>
-                        ) : items.length === 0 ? (
-                            <div className="py-12 text-center text-white/60">
-                                No audit records.
-                            </div>
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left text-sm">
-                                    <thead className="text-xs text-white/50">
-                                    <tr className="border-b border-white/10">
-                                        <th className="py-3 pr-4">When</th>
-                                        <th className="py-3 pr-4">Action</th>
-                                        <th className="py-3 pr-4">Status</th>
-                                        <th className="py-3 pr-4">Details</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/10">
-                                    {items.map((a) => {
-                                        const active = selectedId === a.id;
-                                        return (
-                                            <tr
-                                                key={a.id}
-                                                className={[
-                                                    "cursor-pointer transition",
-                                                    active ? "bg-indigo-500/10" : "hover:bg-white/5",
-                                                ].join(" ")}
-                                                onClick={(e) => openDetail(a.id, e)}
-                                                title="Click to view details"
-                                            >
-                                                <td className="py-3 pr-4 text-white/70">
-                                                    {fmtDate(a.createdAt)}
-                                                </td>
-                                                <td className="py-3 pr-4">
-                            <span className={actionPill()}>
-                              {a.action || "—"}
-                            </span>
-                                                </td>
-                                                <td className="py-3 pr-4">
-                            <span className={statusPill(a.status)}>
-                              {a.status || "—"}
-                            </span>
-                                                </td>
-                                                <td className="py-3 pr-4 text-white/80">
-                                                    <div className="line-clamp-1">
-                                                        {a.details || "—"}
-                                                    </div>
-                                                    <div className="mt-1 text-[11px] text-white/40 font-mono">
-                                                        {String(a.id).slice(0, 8)}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-
-                        {/* Pagination */}
-                        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs text-white/50">
-                            <div>
-                                Page{" "}
-                                <span className="text-white/70 font-semibold">{page + 1}</span>{" "}
-                                /{" "}
-                                <span className="text-white/70 font-semibold">
-                  {Math.max(totalPages, 1)}
-                </span>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                    onClick={() => runSearch(Math.max(page - 1, 0))}
-                                    disabled={loading || page <= 0}
-                                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10 disabled:opacity-50"
-                                >
-                                    Prev
-                                </button>
-
-                                {pageButtons.map((p) => (
-                                    <button
-                                        key={p}
-                                        onClick={() => runSearch(p)}
-                                        disabled={loading}
-                                        className={[
-                                            "rounded-lg border px-3 py-2",
-                                            p === page
-                                                ? "border-indigo-400/40 bg-indigo-500/10 text-white"
-                                                : "border-white/10 bg-white/5 hover:bg-white/10",
-                                        ].join(" ")}
-                                    >
-                                        {p + 1}
-                                    </button>
-                                ))}
-
-                                <button
-                                    onClick={() =>
-                                        runSearch(Math.min(page + 1, Math.max(totalPages - 1, 0)))
-                                    }
-                                    disabled={loading || page >= totalPages - 1}
-                                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 hover:bg-white/10 disabled:opacity-50"
-                                >
-                                    Next
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* DETAIL */}
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur h-fit lg:sticky lg:top-6">
-                        <div className="text-sm font-semibold text-white/80">
-                            Audit Detail
-                        </div>
-
-                        {!selectedId ? (
-                            <div className="mt-4 text-sm text-white/50">
-                                Click a row to view details.
-                            </div>
-                        ) : detailLoading ? (
-                            <div className="mt-4 flex items-center gap-2 text-white/70">
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                                Loading detail...
-                            </div>
-                        ) : !detail ? (
-                            <div className="mt-4 text-sm text-white/50">No detail loaded.</div>
-                        ) : (
-                            <div className="mt-4 space-y-3 text-sm">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className={actionPill()}>{detail.action || "—"}</span>
-                                    <span className={statusPill(detail.status)}>
-                    {detail.status || "—"}
-                  </span>
-                                </div>
-
-                                {/* Useful summary grid */}
-                                <div className="grid grid-cols-1 gap-3">
-                                    {smallKV("Created", fmtDate(detail.createdAt), CalendarClock)}
-                                    {monoKV("Request ID", detail.requestId || selectedId, Fingerprint)}
-
-                                </div>
-
-                                {/* Actor card */}
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
-                                        <User className="h-4 w-4 text-indigo-300" />
-                                        Actor
-                                        <span className={rolePill(actor?.role)}>{actor?.role || "—"}</span>
-                                    </div>
-
-                                    <div className="mt-3 space-y-3">
-                                        {smallKV("Email", actor?.email || "—")}
-                                        {monoKV("Actor ID", actor?.id || "—")}
-                                        {/*{monoKV("Keycloak ID", actor?.keycloakId || "—")}*/}
-                                        {smallKV("Actor Created At", fmtDate(actor?.createdAt))}
-                                    </div>
-                                </div>
-
-                                {/* Election card */}
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
-                                        <ShieldCheck className="h-4 w-4 text-indigo-300" />
-                                        Election
-                                        <span className="ml-auto inline-flex items-center rounded-full px-2 py-1 text-[11px] font-semibold border bg-white/5 text-white/70 border-white/10">
-                      {election?.status || "—"}
-                    </span>
-                                    </div>
-
-                                    <div className="mt-3 space-y-3">
-                                        {smallKV("Name", election?.name || "—")}
-                                        {monoKV("Election ID", election?.id || "—")}
-                                        {smallKV("Type", election?.electionType || "—")}
-                                        {smallKV("Start", fmtDate(election?.startTime))}
-                                        {smallKV("End", fmtDate(election?.endTime))}
-                                        {monoKV("Merkle Root", election?.merkleRoot || "—")}
-                                        {smallKV(
-                                            "Candidate List Uploaded",
-                                            String(!!election?.candidateListUploaded)
-                                        )}
-                                        {smallKV(
-                                            "Voter List Uploaded",
-                                            String(!!election?.voterListUploaded)
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Org card */}
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                    <div className="flex items-center gap-2 text-sm font-semibold text-white/80">
-                                        <Building2 className="h-4 w-4 text-indigo-300" />
-                                        Organization
-                                    </div>
-
-                                    <div className="mt-3 space-y-3">
-                                        {smallKV("Name", org?.name || "—")}
-                                        {monoKV("Org ID", org?.id || "—")}
-                                        {smallKV("Type", org?.type || "—")}
-                                        {smallKV("Country", org?.country || "—")}
-                                        {smallKV(
-                                            "Allowed Domains",
-                                            (org?.allowedDomains || []).join(", ") || "—"
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Action details */}
-                                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                                    <div className="text-sm font-semibold text-white/80">
-                                        Action Detail
-                                    </div>
-                                    <div className="mt-3 space-y-3">
-                                        {smallKV("Entity ID", detail.entityId || "—")}
-                                        {smallKV("Details", detail.details || "—")}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
+                <Btn variant="primary" loading={loading} onClick={() => { setPage(0); search(0); }}>
+                    ⊙ Search
+                </Btn>
             </div>
-        </div>
+
+            {/* Filters */}
+            <Panel
+                className="animate-up"
+                title="Filters"
+                subtitle="POST /audit/search · AuditSearchRequest"
+                action={
+                    <Btn variant="ghost" size="sm" onClick={() => setFilterOpen(p => !p)}>
+                        {filterOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                    </Btn>
+                }
+            >
+                {filterOpen && (
+                    <>
+                        <div className="grid grid-cols-5 gap-3">
+                            {[
+                                { label: "Actor ID (UUID)", name: "actorId",  placeholder: "optional" },
+                                { label: "Action",          name: "action",   placeholder: "e.g. VOTE_CAST" },
+                                { label: "Status",          name: "status",   placeholder: "SUCCESS / FAILED" },
+                                { label: "From",            name: "from",     placeholder: "", type: "datetime-local" },
+                                { label: "To",              name: "to",       placeholder: "", type: "datetime-local" },
+                            ].map(f => (
+                                <div key={f.name} className="flex flex-col gap-1.5">
+                                    <label style={{ fontSize: 12, fontWeight: 600, color: "var(--t2)" }}>{f.label}</label>
+                                    <input
+                                        name={f.name} value={filters[f.name]} onChange={onFilter}
+                                        type={f.type ?? "text"} placeholder={f.placeholder}
+                                        style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 12px", color: "var(--t1)", fontSize: 12, fontFamily: "Inter", outline: "none" }}
+                                        onFocus={e => (e.target.style.borderColor = "var(--purple-b)")}
+                                        onBlur={e  => (e.target.style.borderColor = "var(--border)")}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        <div className="flex items-center justify-between mt-3">
+              <span style={{ fontSize: 11.5, color: "var(--t3)" }}>
+                Total: <strong style={{ color: "var(--t2)" }}>{total}</strong>
+              </span>
+                            <div className="flex items-center gap-2">
+                                <span style={{ fontSize: 11.5, color: "var(--t3)" }}>Page size</span>
+                                <select value={size} onChange={e => { setSize(Number(e.target.value)); setPage(0); }}
+                                        style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px", color: "var(--t1)", fontSize: 12, outline: "none" }}>
+                                    {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </Panel>
+
+            <ErrorBanner error={error} onClose={() => setError(null)} />
+
+            <div className="grid gap-3 animate-up-2" style={{ gridTemplateColumns: "1fr 270px" }}>
+                {/* Table */}
+                <Panel noPad>
+                    {loading ? <Spinner text="Loading audit logs…" /> : rows.length === 0 ? (
+                        <EmptyState icon="⊙" title="No records found" subtitle="Adjust filters and search again." />
+                    ) : (
+                        <>
+                            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                <thead>
+                                <tr>
+                                    {["When", "Action", "Status", "Details"].map(h => (
+                                        <th key={h} style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", padding: "10px 16px", textAlign: "left", borderBottom: "1px solid var(--border)" }}>
+                                            {h}
+                                        </th>
+                                    ))}
+                                </tr>
+                                </thead>
+                                <tbody>
+                                {rows.map((row, i) => (
+                                    <tr
+                                        key={row.id || i}
+                                        onClick={() => selectRow(row)}
+                                        style={{
+                                            borderBottom: i < rows.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+                                            cursor: "pointer", transition: "background .12s",
+                                            background: selected?.id === row.id ? "rgba(124,111,247,.05)" : "transparent",
+                                        }}
+                                        onMouseEnter={ev => { if (selected?.id !== row.id) ev.currentTarget.style.background = "rgba(255,255,255,.02)"; }}
+                                        onMouseLeave={ev => { if (selected?.id !== row.id) ev.currentTarget.style.background = "transparent"; }}
+                                    >
+                                        <td style={{ padding: "12px 16px", fontSize: 11.5, color: "var(--t3)", fontFamily: "JetBrains Mono", whiteSpace: "nowrap" }}>
+                                            {fmtDate(row.createdAt)}
+                                        </td>
+                                        <td style={{ padding: "12px 16px" }}>
+                                            <ActionChip action={row.action || "—"} />
+                                        </td>
+                                        <td style={{ padding: "12px 16px" }}>
+                                            <AuditStatus status={row.status || row.outcome || "SUCCESS"} />
+                                        </td>
+                                        <td style={{ padding: "12px 16px", maxWidth: 240 }}>
+                                            <div style={{ fontSize: 11.5, color: "var(--t2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                                {row.details || row.description || row.message || "—"}
+                                            </div>
+                                            {row.requestId && (
+                                                <div style={{ fontSize: 10, fontFamily: "JetBrains Mono", color: "var(--t3)", marginTop: 2 }}>{String(row.requestId).slice(0, 12)}</div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                            </table>
+                            {/* Pagination */}
+                            <div className="flex items-center justify-between px-4 py-3" style={{ borderTop: "1px solid var(--border)" }}>
+                <span style={{ fontSize: 11.5, color: "var(--t3)" }}>
+                  Page <strong style={{ color: "var(--t2)" }}>{page + 1}</strong> / {totalPages}
+                </span>
+                                <div className="flex gap-1.5">
+                                    <Btn variant="ghost" size="sm" disabled={page === 0}              onClick={() => { setPage(0);       search(0); }}>«</Btn>
+                                    <Btn variant="ghost" size="sm" disabled={page === 0}              onClick={() => { const p = page-1; setPage(p); search(p); }}>← Prev</Btn>
+                                    <Btn variant="ghost" size="sm" disabled={page >= totalPages - 1}  onClick={() => { const p = page+1; setPage(p); search(p); }}>Next →</Btn>
+                                    <Btn variant="ghost" size="sm" disabled={page >= totalPages - 1}  onClick={() => { const p = totalPages-1; setPage(p); search(p); }}>»</Btn>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </Panel>
+
+                {/* Detail panel */}
+                <Panel title="Audit Detail" subtitle={selected ? "GET /audit/{electionId}/{auditId}" : "Click a row"} className="h-fit sticky top-4">
+                    {!selected ? (
+                        <div style={{ fontSize: 12, color: "var(--t3)", padding: "12px 0" }}>Select a row to see full audit detail.</div>
+                    ) : loadingDetail ? (
+                        <Spinner size={16} text="Loading…" />
+                    ) : (
+                        <>
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                <ActionChip action={(detail ?? selected).action || "—"} />
+                                <AuditStatus status={(detail ?? selected).status || (detail ?? selected).outcome || "SUCCESS"} />
+                            </div>
+                            {[
+                                ["Created",    fmtDate((detail ?? selected).createdAt), false],
+                                ["Request ID", (detail ?? selected).requestId || "—",   true],
+                            ].map(([l, v, mono]) => (
+                                <div key={l} className="flex items-center justify-between py-2" style={{ borderBottom: "1px solid var(--border)" }}>
+                                    <span style={{ fontSize: 12, color: "var(--t2)" }}>{l}</span>
+                                    <span style={{ fontSize: mono ? 10.5 : 12.5, fontFamily: mono ? "JetBrains Mono" : "inherit", fontWeight: 600, color: "var(--t1)" }}>{v}</span>
+                                </div>
+                            ))}
+
+                            {/* Actor section */}
+                            {((detail ?? selected).actorEmail || (detail ?? selected).actorRole) && (
+                                <div className="rounded-lg px-3 py-3 mt-3" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--t3)", marginBottom: 8 }}>Actor</div>
+                                    {(detail ?? selected).actorEmail && (
+                                        <div className="flex justify-between mb-1.5">
+                                            <span style={{ fontSize: 11.5, color: "var(--t2)" }}>Email</span>
+                                            <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--t1)" }}>{(detail ?? selected).actorEmail}</span>
+                                        </div>
+                                    )}
+                                    {(detail ?? selected).actorRole && (
+                                        <div className="flex justify-between">
+                                            <span style={{ fontSize: 11.5, color: "var(--t2)" }}>Role</span>
+                                            <Chip variant="purple">{(detail ?? selected).actorRole}</Chip>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Raw detail */}
+                            {(detail ?? selected).details && (
+                                <div className="mt-3">
+                                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".07em", color: "var(--t3)", marginBottom: 6 }}>Details</div>
+                                    <div style={{ fontSize: 11.5, color: "var(--t2)", lineHeight: 1.6 }}>{(detail ?? selected).details}</div>
+                                </div>
+                            )}
+                        </>
+                    )}
+                </Panel>
+            </div>
+        </AdminLayout>
     );
 }

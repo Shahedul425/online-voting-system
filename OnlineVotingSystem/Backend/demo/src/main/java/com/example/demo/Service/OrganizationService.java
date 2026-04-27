@@ -118,6 +118,11 @@ public class OrganizationService implements OrganizationServiceInterface {
         throw new BadRequestException("NOT_IMPLEMENTED", "Not implemented yet");
     }
 
+    @Override
+    public List<OrganizationModel> allOrganizations() {
+        return organizationRepository.findAll();
+    }
+
     @Transactional
     public String assignOrgAdmin(String emailRaw, UUID orgId) {
         UserModel actor = userInfoService.getCurrentUser();

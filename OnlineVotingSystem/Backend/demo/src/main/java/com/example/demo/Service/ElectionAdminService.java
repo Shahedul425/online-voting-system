@@ -1,6 +1,7 @@
 package com.example.demo.Service;
 
 import com.example.demo.DAO.AuditLogsRequest;
+import com.example.demo.DAO.ElectionListItem;
 import com.example.demo.DAO.ElectionRequest;
 import com.example.demo.DAO.ElectionUpdateRequest;
 import com.example.demo.Enums.ActionStatus;
@@ -364,6 +365,39 @@ public class ElectionAdminService implements ElectionAdminServiceInterface {
             throw new ForbiddenException("CROSS_ORG_ACCESS", "Forbidden");
         }
         return electionModelRepository.findByOrganizationId(id);
+    }
+
+    /**
+     * Same scope rules as {@link #getAllElections(String)}, but enriches each
+     * row with its voter / candidate / ballot counts so the AdminElections
+     * listing page can show "X eligible · Y cast" without N+1 round trips per
+     * row from the client.
+     */
+    public List<ElectionListItem> getAllElectionsList(String orgId) {
+        return getAllElections(orgId).stream()
+                .map(this::toListItem)
+                .toList();
+    }
+
+    private ElectionListItem toListItem(ElectionModel e) {
+        UUID eid = e.getId();
+        return new ElectionListItem(
+                eid,
+                e.getName(),
+                e.getDescription(),
+                e.getElectionType(),
+                e.getStatus(),
+                e.getStartTime(),
+                e.getEndTime(),
+                e.getPublishedAt(),
+                e.getCreatedAt(),
+                e.isVoterListUploaded(),
+                e.isCandidateListUploaded(),
+                voterListModelRepository.countByElection_Id(eid),
+                candidateListRepository.countByElectionId_Id(eid),
+                voteModelRepository.countByElectionId_Id(eid),
+                e.getMerkleRoot()
+        );
     }
 
     private ElectionModel getElectionOrThrowAndScope(String electionId) {

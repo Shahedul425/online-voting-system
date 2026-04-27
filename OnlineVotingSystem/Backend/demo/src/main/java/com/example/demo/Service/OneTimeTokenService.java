@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.stereotype.Service;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -33,8 +34,31 @@ public class OneTimeTokenService implements TokenServiceInterface {
     private final SafeAuditService auditService;
     private final UserInfoService userService;
 
+    private static final SecureRandom RNG = new SecureRandom();
+
+    /**
+     * Returns a fresh 6-digit OTP string. Retries on the very rare collision
+     * with an outstanding token. The collision probability for 1M codes vs
+     * a tiny table of in-flight tokens (typically < 1000) is negligible.
+     */
+    private String generateUniqueSixDigitOtp() {
+        for (int i = 0; i < 8; i++) {
+            String candidate = String.format("%06d", RNG.nextInt(1_000_000));
+            if (tokenRepo.findByTokenId(candidate).isEmpty()) {
+                return candidate;
+            }
+        }
+        // Worst case (extremely unlikely): fall back to a longer code so the
+        // request still succeeds. The voter will see something like "123456-9".
+        return String.format("%06d", RNG.nextInt(1_000_000)) + "-" + RNG.nextInt(10);
+    }
+
     /**
      * tokenRefId = business correlation id for this issuance (NOT http requestId)
+     *
+     * The {@code tokenId} field stored on the model is the 6-digit OTP we
+     * e-mail the voter. The voter types it into the ballot UI and the cast
+     * endpoint looks the token up by this same string.
      */
     @Override
     public OneTokenModel issueToken(String tokenRefId, ElectionModel election, VoterListModel voter) {
@@ -46,7 +70,7 @@ public class OneTimeTokenService implements TokenServiceInterface {
         t.setElection(election);
         t.setVoter(voter);
         t.setConsumed(false);
-        t.setTokenId(UUID.randomUUID().toString());
+        t.setTokenId(generateUniqueSixDigitOtp());
         t.setRequestId(tokenRefId); // business ref id
 
         OneTokenModel saved = tokenRepo.save(t);

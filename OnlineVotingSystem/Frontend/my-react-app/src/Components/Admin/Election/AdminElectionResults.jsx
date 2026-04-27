@@ -1,648 +1,362 @@
-// ✅ src/Components/Admin/Election/AdminElectionResults.jsx
-"use client";
-
-import React, { useEffect, useMemo, useState } from "react";
+// src/Components/Admin/Election/AdminElectionResults.jsx
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Trophy, Loader2, BarChart3, Copy, Check } from "lucide-react";
+import { ArrowLeft, BarChart3, Copy, Check, Download } from "lucide-react";
 import { OVS } from "../../../Service/Api/endpoints";
+import { useAppStore } from "../../../Service/GlobalState/appStore";
 import { toAppError } from "../../../Service/ErrorHandling/appError";
-import { ErrorBanner } from "../../Errors/ErrorBanner";
+import { withUnwrap } from "../../../Service/Api/apiUnwrap";
+import AdminLayout from "../../../components/layout/AdminLayout";
+import {
+    Panel, KpiCard, Spinner, ErrorBanner, Btn, Chip, EmptyState,
+} from "../../ui";
+import { Users, CheckCircle2, BarChart2, Hash } from "lucide-react";
 
-function fmtDate(v) {
-    if (!v) return "—";
-    const d = new Date(v);
-    if (Number.isNaN(d.getTime())) return "—";
-    return new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    }).format(d);
-}
+const fmt   = n => Number(n ?? 0).toLocaleString();
+const pct   = n => `${Number(n ?? 0).toFixed(2)}%`;
+const ini   = name => String(name || "").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+const fmtDT = v => { try { return new Intl.DateTimeFormat(undefined, { day:"2-digit", month:"short", year:"numeric", hour:"2-digit", minute:"2-digit" }).format(new Date(v)); } catch { return String(v || "—"); } };
 
-function pill(base) {
-    return `inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border ${base}`;
-}
-
-function statusPill(s) {
-    const v = String(s || "").toLowerCase();
-    if (v === "published") return pill("border-purple-500/20 bg-purple-500/10 text-purple-200");
-    if (v === "closed") return pill("border-sky-500/20 bg-sky-500/10 text-sky-200");
-    return pill("border-white/10 bg-white/5 text-white/70");
-}
-
-function clamp(n, a, b) {
-    return Math.min(b, Math.max(a, n));
-}
-
-function pct(n) {
-    return `${Number(n ?? 0).toFixed(2)}%`;
-}
-
-function shortenMiddle(str, left = 12, right = 12) {
-    const s = String(str || "");
-    if (!s) return "—";
-    if (s.length <= left + right + 3) return s;
-    return `${s.slice(0, left)}…${s.slice(-right)}`;
-}
-
-/**
- * Trend series extraction:
- * Supports a few common shapes, without breaking if not present.
- * - r.trend: number[]
- * - r.trendPoints: number[]
- * - r.votesOverTime: number[]
- * - r.timeSeries: { value:number }[]
- * - r.timeline: { votes:number }[] | { count:number }[]
- */
-function getTrendSeries(r) {
-    const tryNums = (arr) =>
-        Array.isArray(arr) ? arr.map((x) => Number(x)).filter((x) => Number.isFinite(x)) : [];
-
-    let series = tryNums(r?.trend);
-    if (series.length) return series;
-
-    series = tryNums(r?.trendPoints);
-    if (series.length) return series;
-
-    series = tryNums(r?.votesOverTime);
-    if (series.length) return series;
-
-    if (Array.isArray(r?.timeSeries)) {
-        series = r.timeSeries
-            .map((x) => Number(x?.value ?? x?.votes ?? x?.count))
-            .filter((x) => Number.isFinite(x));
-        if (series.length) return series;
-    }
-
-    if (Array.isArray(r?.timeline)) {
-        series = r.timeline
-            .map((x) => Number(x?.votes ?? x?.count ?? x?.value))
-            .filter((x) => Number.isFinite(x));
-        if (series.length) return series;
-    }
-
-    return [];
+function Donut({ turnout = 68.4, voted = 0, abstained = 0 }) {
+    const circ   = 251.3;
+    const filled = circ * Math.min(turnout / 100, 1);
+    return (
+        <div className="flex flex-col items-center gap-4">
+            <svg width="108" height="108" viewBox="0 0 108 108">
+                <circle cx="54" cy="54" r="40" fill="none" stroke="rgba(255,255,255,.06)" strokeWidth="11" />
+                <circle cx="54" cy="54" r="40" fill="none" stroke="url(#tg)" strokeWidth="11"
+                        strokeDasharray={`${filled} ${circ - filled}`} strokeDashoffset="62.8" strokeLinecap="round" />
+                <defs>
+                    <linearGradient id="tg" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="#7c6ff7" /><stop offset="100%" stopColor="#4dd9e8" />
+                    </linearGradient>
+                </defs>
+                <text x="54" y="50" textAnchor="middle" fontSize="15" fontWeight="700" fill="#e8eaf0" fontFamily="JetBrains Mono,monospace">{pct(turnout)}</text>
+                <text x="54" y="64" textAnchor="middle" fontSize="8" fill="#4e5270" fontFamily="Inter,sans-serif" fontWeight="600" letterSpacing="1">TURNOUT</text>
+            </svg>
+            <div style={{ width: "100%" }}>
+                {[["Voted", voted, "var(--purple)"], ["Abstained", abstained, "rgba(255,255,255,.12)"]].map(([l, v, c]) => (
+                    <div key={l} className="flex items-center justify-between py-1">
+                        <div className="flex items-center gap-2" style={{ fontSize: 12, color: "var(--t2)" }}>
+                            <div style={{ width: 8, height: 8, borderRadius: 2, background: c }} />
+                            {l}
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t1)", fontFamily: "JetBrains Mono" }}>{fmt(v)}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
 }
 
 export default function AdminElectionResults() {
-    const navigate = useNavigate();
     const { electionId } = useParams();
+    const navigate        = useNavigate();
+    const election        = useAppStore(s => s.election);
 
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-
-    const [data, setData] = useState(null);
-    const [position, setPosition] = useState("");
-
-    const [copied, setCopied] = useState(false);
+    const [results,  setResults]  = useState(null); // ElectionResultsResponse
+    const [loading,  setLoading]  = useState(true);
+    const [error,    setError]    = useState(null);
+    const [activePos, setActivePos] = useState(null);
+    const [copied,   setCopied]   = useState(false);
 
     useEffect(() => {
         let alive = true;
-
         async function load() {
-            setError(null);
-            setLoading(true);
-
-            const res = await OVS.getAdminElectionResults({ electionId });
-            if (!alive) return;
-
-            setLoading(false);
-            if (!res.ok) {
-                setError(toAppError(res));
-                return;
+            if (!electionId) return;
+            setLoading(true); setError(null);
+            try {
+                // GET /admin/election/results/{electionId} (published only)
+                const data = await withUnwrap(OVS.getAdminElectionResults({ electionId }));
+                if (!alive) return;
+                setResults(data);
+                const positions = Object.keys(data?.resultsByPosition ?? {});
+                if (positions.length > 0) setActivePos(positions[0]);
+            } catch (err) {
+                if (!alive) return;
+                setError(toAppError(err));
+            } finally {
+                if (!alive) return;
+                setLoading(false);
             }
-
-            setData(res.data);
-
-            const positions = Object.keys(res.data?.resultsByPosition || {});
-            setPosition((p) => p || positions[0] || "");
         }
-
-        if (electionId) load();
-        return () => {
-            alive = false;
-        };
+        load();
+        return () => { alive = false; };
     }, [electionId]);
 
-    const positions = useMemo(() => Object.keys(data?.resultsByPosition || {}), [data]);
+    const positions = useMemo(() => Object.keys(results?.resultsByPosition ?? {}), [results]);
+    const activeCands = useMemo(() => results?.resultsByPosition?.[activePos] ?? [], [results, activePos]);
+    const winner      = useMemo(() => activeCands.find(c => c.winner) ?? activeCands[0] ?? null, [activeCands]);
 
-    const rowsRaw = useMemo(() => (position ? data?.resultsByPosition?.[position] || [] : []), [data, position]);
+    async function copyMerkle() {
+        try { await navigator.clipboard.writeText(results?.merkleRootB64 ?? ""); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch {}
+    }
 
-    // Ensure winner first (rank asc), stable sort
-    const rows = useMemo(() => {
-        const copy = [...(rowsRaw || [])];
-        copy.sort((a, b) => Number(a?.rank ?? 999999) - Number(b?.rank ?? 999999));
-        return copy;
-    }, [rowsRaw]);
-
-    const topWinner = rows?.[0] || null;
-    const runnerUp = rows?.[1] || null;
-
-    const margin = useMemo(() => {
-        if (!topWinner || !runnerUp) return null;
-        const winVotes = Number(topWinner.votes ?? 0);
-        const runVotes = Number(runnerUp.votes ?? 0);
-        const winShare = Number(topWinner.voteSharePercent ?? 0);
-        const runShare = Number(runnerUp.voteSharePercent ?? 0);
-
-        return {
-            runnerUpName: runnerUp.fullName,
-            marginVotes: winVotes - runVotes,
-            marginPts: winShare - runShare,
-        };
-    }, [topWinner, runnerUp]);
-
-    const voted = Number(data?.votedCount ?? 0);
-    const totalVoters = Number(data?.totalVoters ?? 0);
-    const notVoted = Math.max(0, totalVoters - voted);
-
-    async function copyToClipboard(text) {
-        try {
-            await navigator.clipboard.writeText(String(text ?? ""));
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 900);
-        } catch {}
+    function exportCSV() {
+        if (!results) return;
+        const rows = [["Position", "Rank", "Name", "BallotSerial", "Votes", "SharePct", "Winner"]];
+        for (const [pos, cands] of Object.entries(results.resultsByPosition ?? {})) {
+            for (const c of cands) rows.push([pos, c.rank, c.fullName, c.ballotSerial, c.votes, c.voteSharePercent, c.winner]);
+        }
+        const csv  = rows.map(r => r.join(",")).join("\n");
+        const blob = new Blob([csv], { type: "text/csv" });
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `results_${electionId}.csv`; a.click(); URL.revokeObjectURL(a.href);
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-zinc-950 px-4 py-10 text-white">
-            {/* hide scrollbars (still scrollable) */}
-            <style>{`
-        .no-scrollbar::-webkit-scrollbar{display:none}
-        .no-scrollbar{-ms-overflow-style:none;scrollbar-width:none}
-      `}</style>
-
-            <div className="mx-auto w-full max-w-6xl">
-                <button
-                    onClick={() => navigate(`/admin/elections/${electionId}`)}
-                    className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white"
-                >
-                    <ArrowLeft className="h-4 w-4" />
-                    Back to Workspace
-                </button>
-
-                <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                    <div className="min-w-0">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2">
-                            <BarChart3 className="h-4 w-4 text-indigo-300" />
-                            <span className="text-sm text-white/80">Admin • Results</span>
-                        </div>
-
-                        <h1 className="mt-4 text-3xl font-extrabold tracking-tight truncate">
-                            {data?.electionName || "Election Results"}
-                        </h1>
-
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-white/60">
-                            <span className={statusPill(data?.status)}>{String(data?.status || "—").toUpperCase()}</span>
-                            <span className="text-xs text-white/40 font-mono">{data?.electionId || electionId}</span>
-                        </div>
-                    </div>
-
-                    <div className="w-full sm:w-[440px] space-y-3">
-                        <div>
-                            <label className="text-xs text-white/60">Position</label>
-                            <select
-                                value={position}
-                                onChange={(e) => setPosition(e.target.value)}
-                                className="mt-2 w-full rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2 text-sm outline-none focus:border-indigo-400/60"
-                            >
-                                {positions.length === 0 ? <option value="">No positions</option> : null}
-                                {positions.map((p) => (
-                                    <option key={p} value={p}>
-                                        {p}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {/* Merkle Root - nicely visible with copy icon */}
-                        {data?.merkleRootB64 ? (
-                            <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0">
-                                        <div className="text-xs text-white/50">Merkle Root</div>
-                                        <div className="mt-1 font-mono text-xs text-white/75 break-all">
-                                            {shortenMiddle(data.merkleRootB64, 18, 18)}
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        onClick={() => copyToClipboard(data.merkleRootB64)}
-                                        className="shrink-0 inline-flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-900/40 px-3 py-2 text-xs hover:bg-white/10"
-                                        title="Copy Merkle Root"
-                                    >
-                                        {copied ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
-                                        {copied ? "Copied" : "Copy"}
-                                    </button>
-                                </div>
-                            </div>
-                        ) : null}
-                    </div>
+        <AdminLayout
+            breadcrumbs={[
+                { label: "Admin",     path: "/admin" },
+                { label: results?.electionName || election?.name || electionId, path: `/admin/elections/${electionId}` },
+                { label: "Results" },
+            ]}
+            topbarRight={
+                <div className="flex items-center gap-2">
+                    <Chip variant="green" dot>Published · Verified</Chip>
+                    <Btn variant="ghost" size="sm" onClick={copyMerkle}>{copied ? <><Check size={11} /> Copied</> : <><Copy size={11} /> Merkle</>}</Btn>
+                    <Btn variant="ghost" size="sm" onClick={exportCSV}><Download size={11} /> Export</Btn>
+                    <Btn variant="ghost" size="sm" onClick={() => navigate(`/admin/elections/${electionId}`)}>
+                        <ArrowLeft size={12} /> Back
+                    </Btn>
                 </div>
-
-                <div className="mt-6">
+            }
+        >
+            {loading ? <Spinner text="Loading results…" /> : error ? (
+                <>
                     <ErrorBanner error={error} onClose={() => setError(null)} />
-                </div>
-
-                <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur">
-                    {loading ? (
-                        <div className="flex items-center justify-center gap-2 py-16 text-white/70">
-                            <Loader2 className="h-5 w-5 animate-spin" />
-                            Loading results...
+                    {error?.status === 403 && (
+                        <div className="rounded-xl px-4 py-4 text-center" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--t2)", marginBottom: 6 }}>Results not available</div>
+                            <div style={{ fontSize: 12, color: "var(--t3)" }}>
+                                Results are only accessible for <strong style={{ color: "var(--t1)" }}>published</strong> elections.
+                                Publish this election first from the workspace.
+                            </div>
+                            <Btn variant="ghost" className="mt-4" onClick={() => navigate(`/admin/elections/${electionId}`)}>
+                                ← Go to Workspace
+                            </Btn>
                         </div>
-                    ) : !data ? (
-                        <div className="py-12 text-center text-white/60">No data.</div>
-                    ) : (
-                        <>
-                            {/* KPI cards */}
-                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                                <Kpi title="Total voters" value={String(data.totalVoters ?? 0)} />
-                                <Kpi title="Voted" value={String(data.votedCount ?? 0)} />
-                                <Kpi title="Turnout" value={pct(data.turnoutPercent ?? 0)} />
-                                <Kpi title="Ballots cast" value={String(data.ballotsCast ?? 0)} />
+                    )}
+                </>
+            ) : !results ? null : (
+                <>
+                    {/* Election header */}
+                    <div className="rounded-xl p-5 flex items-start justify-between gap-4 animate-up"
+                         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+                        <div>
+                            <h1 style={{ fontSize: 20, fontWeight: 700, color: "var(--t1)", letterSpacing: "-.01em" }}>
+                                {results.electionName}
+                            </h1>
+                            <div className="flex items-center gap-3 mt-2 flex-wrap">
+                                <Chip variant="green" dot>Published</Chip>
+                                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--t3)" }}>{results.organizationName}</span>
+                                <span style={{ color: "var(--t3)", fontSize: 11 }}>·</span>
+                                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--t3)" }}>{results.electionType}</span>
+                                <span style={{ color: "var(--t3)", fontSize: 11 }}>·</span>
+                                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--t3)" }}>Published {fmtDT(results.publishedAt)}</span>
                             </div>
-
-                            {/* Info row: clearer spacing */}
-                            <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                                <Info
-                                    title="Organization"
-                                    value={data.organizationName || String(data.organizationId || "—")}
-                                    mono={!data.organizationName}
-                                />
-                                <Info title="Published at" value={fmtDate(data.publishedAt)} />
-                                <Info title="Schedule" value={`${fmtDate(data.startTime)} → ${fmtDate(data.endTime)}`} />
+                        </div>
+                        <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", maxWidth: 280, flexShrink: 0 }}>
+                            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 4 }}>merkleRootB64</div>
+                            <div style={{ fontSize: 9.5, fontFamily: "JetBrains Mono", color: "var(--t2)", wordBreak: "break-all", lineHeight: 1.6 }}>
+                                {results.merkleRootB64 ? `${results.merkleRootB64.slice(0, 48)}…` : "—"}
                             </div>
+                            <button onClick={copyMerkle} style={{ background: "none", border: "none", color: "var(--purple)", fontSize: 10.5, fontWeight: 600, cursor: "pointer", padding: "4px 0 0", fontFamily: "Inter" }}>
+                                ⎘ Copy full root
+                            </button>
+                        </div>
+                    </div>
 
-                            {/* Charts row: Turnout + Winner beside it */}
-                            <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
-                                {/* Turnout */}
-                                <div className="rounded-2xl border border-white/10 bg-zinc-900/30 p-5 lg:col-span-1">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <div className="text-xs text-white/50">Turnout</div>
-                                            <div className="mt-1 text-sm text-white/80">{voted.toLocaleString()} voted</div>
-                                        </div>
-                                        <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70">
-                      {pct(data.turnoutPercent ?? 0)}
-                    </span>
+                    {/* Position tabs */}
+                    <div className="flex gap-1.5 flex-wrap animate-up">
+                        {positions.map(pos => (
+                            <button
+                                key={pos}
+                                onClick={() => setActivePos(pos)}
+                                style={{
+                                    padding: "7px 16px", borderRadius: 7, fontSize: 12, fontWeight: 600, cursor: "pointer",
+                                    background: activePos === pos ? "var(--purple-d)" : "var(--surface-2)",
+                                    color:      activePos === pos ? "var(--purple)"   : "var(--t2)",
+                                    border:     `1px solid ${activePos === pos ? "var(--purple-b)" : "var(--border)"}`,
+                                    transition: "all .15s", fontFamily: "Inter",
+                                }}
+                            >
+                                {pos}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* KPI row */}
+                    <div className="grid grid-cols-4 gap-3 animate-up-2">
+                        <KpiCard icon={Users}       accent="purple" value={fmt(results.totalVoters)}    label="Total Voters"        badge="registered" />
+                        <KpiCard icon={CheckCircle2} accent="cyan"  value={fmt(results.votedCount)}     label="Votes Cast"          badge={pct(results.turnoutPercent)} />
+                        <KpiCard icon={BarChart2}   accent="green"  value={pct(results.turnoutPercent)} label="Participation Rate"  badge="turnout" />
+                        <KpiCard icon={Hash}        accent="pink"   value={fmt(results.ballotsCast)}    label="Ballots Cast"        badge={`${positions.length} positions`} />
+                    </div>
+
+                    {/* 2-col: breakdown table | right panel */}
+                    <div className="grid gap-3 animate-up-3" style={{ gridTemplateColumns: "1fr 240px" }}>
+                        {/* Candidate breakdown table */}
+                        <Panel
+                            title={`${activePos} · Breakdown`}
+                            subtitle={`${activeCands.length} candidate${activeCands.length !== 1 ? "s" : ""}`}
+                            noPad
+                        >
+                            {activeCands.length === 0 ? (
+                                <EmptyState icon="📊" title="No results" subtitle="No candidates in this position." />
+                            ) : (
+                                <div>
+                                    {/* Table header */}
+                                    <div className="grid items-center px-[18px] py-2"
+                                         style={{ gridTemplateColumns: "26px 1fr 70px 108px 48px", gap: 10, borderBottom: "1px solid var(--border)", background: "rgba(255,255,255,.015)" }}>
+                                        {["", "Candidate", "Votes", "Share", "Δ"].map(h => (
+                                            <div key={h} style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", textAlign: h === "Votes" || h === "Δ" ? "right" : "left" }}>
+                                                {h}
+                                            </div>
+                                        ))}
                                     </div>
 
-                                    <div className="mt-4 flex items-center justify-center">
-                                        <DonutChart
-                                            size={150}
-                                            thickness={14}
-                                            segments={[
-                                                { value: voted, className: "stroke-indigo-400/70" },
-                                                { value: notVoted, className: "stroke-white/10" },
-                                            ]}
-                                            centerTop={pct(data.turnoutPercent ?? 0)}
-                                            centerBottom="turnout"
-                                        />
-                                    </div>
-
-                                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                                        <LegendDot label="Voted" value={voted.toLocaleString()} dotClassName="bg-indigo-400/70" />
-                                        <LegendDot label="Not voted" value={notVoted.toLocaleString()} dotClassName="bg-white/20" />
-                                    </div>
-                                </div>
-
-                                {/* Winner beside chart */}
-                                <div className="rounded-2xl border border-white/10 bg-zinc-900/30 p-5 lg:col-span-2">
-                                    <div className="flex flex-wrap items-end justify-between gap-2">
-                                        <div>
-                                            <div className="text-xs text-white/50">Winner</div>
-                                            <div className="mt-1 text-sm font-semibold text-white/85">Position • {position || "—"}</div>
-                                        </div>
-
-                                        {margin ? (
-                                            <span
-                                                className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-200"
-                                                title={`Winner margin vs ${margin.runnerUpName || "runner-up"}`}
+                                    {activeCands.map((c, i) => {
+                                        const isWin = c.winner;
+                                        const dv    = isWin ? null : (winner?.votes ?? 0) - (c.votes ?? 0);
+                                        const initials = ini(c.fullName);
+                                        return (
+                                            <div
+                                                key={c.candidateId || i}
+                                                className="grid items-center px-[18px] py-3 transition-all"
+                                                style={{
+                                                    gridTemplateColumns: "26px 1fr 70px 108px 48px", gap: 10,
+                                                    borderBottom: i < activeCands.length - 1 ? "1px solid var(--border)" : "none",
+                                                    background: isWin ? "rgba(124,111,247,.06)" : "transparent",
+                                                }}
+                                                onMouseEnter={ev => { if (!isWin) ev.currentTarget.style.background = "rgba(255,255,255,.018)"; }}
+                                                onMouseLeave={ev => { ev.currentTarget.style.background = isWin ? "rgba(124,111,247,.06)" : "transparent"; }}
                                             >
-                        <span className="text-emerald-200/90">Margin</span>
-                        <span className="text-white/50">•</span>
-                        <span className="font-mono">+{Number(margin.marginVotes).toLocaleString()} votes</span>
-                        <span className="text-white/50">•</span>
-                        <span className="font-mono">+{Number(margin.marginPts).toFixed(2)} pts</span>
-                      </span>
-                                        ) : (
-                                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/60">
-                        {rows.length ? `${rows.length} candidates` : "No candidates"}
-                      </span>
-                                        )}
-                                    </div>
-
-                                    {!topWinner ? (
-                                        <div className="mt-6 text-center text-white/60">No results for this position.</div>
-                                    ) : (
-                                        <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-5">
-                                            <div className="flex items-start gap-3">
-                                                <div className="rounded-xl border border-white/10 bg-white/5 p-2">
-                                                    <Trophy className="h-5 w-5 text-amber-200" />
+                                                {/* Rank */}
+                                                <div style={{ fontSize: 12, fontWeight: 700, textAlign: "center", fontFamily: "JetBrains Mono", color: isWin ? "var(--purple)" : "var(--t3)" }}>
+                                                    #{c.rank}
                                                 </div>
-
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="text-sm font-semibold text-amber-100">Winner • {position}</div>
-                                                    <div className="mt-1 text-xl font-extrabold tracking-tight text-white">
-                                                        {topWinner.fullName}
+                                                {/* Candidate info */}
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[9.5px] font-bold flex-shrink-0"
+                                                         style={{ background: isWin ? "var(--purple-d)" : "var(--surface-2)", color: isWin ? "var(--purple)" : "var(--t3)", border: `1px solid ${isWin ? "rgba(124,111,247,.25)" : "var(--border)"}` }}>
+                                                        {initials}
                                                     </div>
-
-                                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-white/70">
-                            <span>
-                              {Number(topWinner.votes ?? 0).toLocaleString()} votes • {pct(topWinner.voteSharePercent ?? 0)}
-                            </span>
-                                                        {topWinner.ballotSerial ? (
-                                                            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs font-mono text-white/55">
-                                {topWinner.ballotSerial}
-                              </span>
-                                                        ) : null}
-                                                        {(() => {
-                                                            const t = getTrendSeries(topWinner);
-                                                            return t.length >= 2 ? (
-                                                                <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-xs text-white/60">
-                                  Trend <Sparkline values={t} winner title="Winner trend" />
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <span style={{ fontSize: 13, fontWeight: 600, color: isWin ? "var(--t1)" : "var(--t2)" }}>{c.fullName}</span>
+                                                            {isWin && (
+                                                                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: ".07em", textTransform: "uppercase", padding: "2px 6px", borderRadius: 20, background: "rgba(255,215,0,.1)", color: "#ffd700", border: "1px solid rgba(255,215,0,.2)" }}>
+                                  Winner
                                 </span>
-                                                            ) : null;
-                                                        })()}
-                                                    </div>
-
-                                                    {runnerUp ? (
-                                                        <div className="mt-3 text-xs text-white/50">
-                                                            Runner-up: <span className="text-white/70 font-semibold">{runnerUp.fullName}</span>
+                                                            )}
                                                         </div>
-                                                    ) : null}
+                                                        <div style={{ fontSize: 10, fontFamily: "JetBrains Mono", color: "var(--t3)", marginTop: 2 }}>#{c.ballotSerial}</div>
+                                                    </div>
+                                                </div>
+                                                {/* Votes */}
+                                                <div style={{ fontFamily: "JetBrains Mono", fontSize: 13, fontWeight: 700, color: "var(--t1)", textAlign: "right" }}>
+                                                    {fmt(c.votes)}
+                                                </div>
+                                                {/* Share bar */}
+                                                <div>
+                                                    <div style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--t2)", marginBottom: 3 }}>{pct(c.voteSharePercent)}</div>
+                                                    <div style={{ height: 4, background: "rgba(255,255,255,.07)", borderRadius: 2, overflow: "hidden" }}>
+                                                        <div style={{ height: "100%", borderRadius: 2, width: `${Math.min(c.voteSharePercent ?? 0, 100)}%`, background: isWin ? "linear-gradient(90deg, var(--purple), var(--cyan))" : "rgba(255,255,255,.18)" }} />
+                                                    </div>
+                                                </div>
+                                                {/* Delta */}
+                                                <div style={{ fontFamily: "JetBrains Mono", fontSize: 11, fontWeight: 600, textAlign: "right", color: isWin ? "var(--t3)" : "var(--red)" }}>
+                                                    {dv == null ? "—" : `-${fmt(dv)}`}
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
-
-                                    <div className="mt-4 text-xs text-white/40">
-                                        Winner block summarizes the top candidate; detailed breakdown is below.
-                                    </div>
+                                        );
+                                    })}
                                 </div>
-                            </div>
+                            )}
+                        </Panel>
 
-                            {/* ONE list only: bottom table (enhanced with side-info + trend + margin) */}
-                            <div className="mt-6">
-                                <div className="flex items-end justify-between gap-3">
-                                    <div>
-                                        <div className="text-sm font-semibold text-white/85">Candidate results</div>
-                                        <div className="mt-1 text-xs text-white/50">
-                                            Includes margin vs leader and sparkline if your API provides time-series for a candidate.
-                                        </div>
+                        {/* Right panel */}
+                        <div className="flex flex-col gap-3">
+                            {/* Turnout donut */}
+                            <Panel title="Turnout" subtitle={pct(results.turnoutPercent)}>
+                                <Donut
+                                    turnout={results.turnoutPercent}
+                                    voted={results.votedCount}
+                                    abstained={(results.totalVoters ?? 0) - (results.votedCount ?? 0)}
+                                />
+                            </Panel>
+
+                            {/* All positions summary */}
+                            <Panel title="All Positions" subtitle={`${positions.length} total`}>
+                                {positions.map((pos, i) => {
+                                    const cands = results.resultsByPosition[pos] ?? [];
+                                    const w     = cands.find(c => c.winner) ?? cands[0];
+                                    const isActive = pos === activePos;
+                                    return (
+                                        <button
+                                            key={pos}
+                                            onClick={() => setActivePos(pos)}
+                                            className="w-full text-left py-2 transition-all"
+                                            style={{ borderBottom: i < positions.length - 1 ? "1px solid var(--border)" : "none", background: "none", border: "none", padding: "9px 0", cursor: "pointer", borderBottomColor: i < positions.length - 1 ? "var(--border)" : "transparent", borderBottomWidth: i < positions.length - 1 ? 1 : 0, borderBottomStyle: "solid" }}
+                                        >
+                                            <div className="flex items-center justify-between mb-1.5">
+                                                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--t3)" }}>{pos}</span>
+                                                <span style={{ fontSize: 11.5, fontWeight: 700, color: isActive ? "var(--purple)" : "var(--t2)", fontFamily: "JetBrains Mono" }}>{pct(w?.voteSharePercent ?? 0)}</span>
+                                            </div>
+                                            <div style={{ fontSize: 12, fontWeight: 600, color: isActive ? "var(--t1)" : "var(--t2)", textAlign: "left" }}>{w?.fullName ?? "—"}</div>
+                                            <div style={{ height: 3, background: "rgba(255,255,255,.06)", borderRadius: 2, overflow: "hidden", marginTop: 5 }}>
+                                                <div style={{ height: "100%", borderRadius: 2, width: `${Math.min(w?.voteSharePercent ?? 0, 100)}%`, background: isActive ? "linear-gradient(90deg, var(--purple), var(--cyan))" : "rgba(255,255,255,.18)" }} />
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </Panel>
+
+                            {/* Integrity */}
+                            <Panel title="Integrity">
+                                {[
+                                    ["Merkle root", "✓ Sealed"],
+                                    ["Status",      "✓ Published"],
+                                    ["Ballots",     `✓ ${fmt(results.ballotsCast)}`],
+                                    ["Audit log",   "✓ Active"],
+                                    ["Cross-org",   "✓ Scoped"],
+                                ].map(([l, v], i, arr) => (
+                                    <div key={l} className="flex items-center justify-between py-2"
+                                         style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none" }}>
+                                        <span style={{ fontSize: 12, color: "var(--t2)" }}>{l}</span>
+                                        <span style={{ fontSize: 11, fontWeight: 600, color: "var(--green)" }}>{v}</span>
                                     </div>
-                                    <div className="text-xs text-white/50">
-                                        {rows.length ? `${rows.length} candidates` : "—"}
+                                ))}
+                                {/* Merkle root area */}
+                                <div style={{ background: "var(--surface-2)", borderTop: "1px solid var(--border)", margin: "0 -18px -18px", padding: "12px 18px" }}>
+                                    <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: ".09em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 5 }}>merkleRootB64</div>
+                                    <div style={{ fontSize: 9, fontFamily: "JetBrains Mono", color: "var(--t2)", wordBreak: "break-all", lineHeight: 1.7 }}>{results.merkleRootB64 || "—"}</div>
+                                    <button onClick={copyMerkle} style={{ background: "none", border: "none", color: "var(--purple)", fontSize: 10.5, fontWeight: 600, cursor: "pointer", marginTop: 6, padding: 0, display: "block", fontFamily: "Inter" }}>
+                                        {copied ? "✓ Copied" : "⎘ Copy root"}
+                                    </button>
+                                </div>
+                            </Panel>
+
+                            {/* Schedule */}
+                            <Panel title="Schedule">
+                                {[
+                                    ["Started",   fmtDT(results.startTime)],
+                                    ["Ended",     fmtDT(results.endTime)],
+                                    ["Published", fmtDT(results.publishedAt)],
+                                    ["Type",      results.electionType || "—"],
+                                    ["Org",       results.organizationName || "—"],
+                                ].map(([l, v], i, arr) => (
+                                    <div key={l} className="flex justify-between py-2"
+                                         style={{ borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none" }}>
+                                        <span style={{ fontSize: 11.5, color: "var(--t2)" }}>{l}</span>
+                                        <span style={{ fontSize: 11, fontFamily: "JetBrains Mono", color: "var(--t1)" }}>{v}</span>
                                     </div>
-                                </div>
-
-                                <div className="mt-4 rounded-2xl border border-white/10 bg-zinc-900/20">
-                                    <div className="max-h-[520px] overflow-auto no-scrollbar">
-                                        <table className="w-full text-left text-sm">
-                                            <thead className="sticky top-0 z-10 bg-zinc-950/80 backdrop-blur text-xs text-white/50">
-                                            <tr className="border-b border-white/10">
-                                                <th className="py-3 px-4">Rank</th>
-                                                <th className="py-3 pr-4">Candidate</th>
-                                                <th className="py-3 pr-4">Serial</th>
-                                                <th className="py-3 pr-4">Votes</th>
-                                                <th className="py-3 pr-4">Share</th>
-                                                <th className="py-3 pr-4">ΔVotes</th>
-                                                <th className="py-3 pr-4">ΔPts</th>
-                                                <th className="py-3 pr-4">Trend</th>
-                                            </tr>
-                                            </thead>
-
-                                            <tbody className="divide-y divide-white/10">
-                                            {rows.map((r) => {
-                                                const leaderVotes = Number(topWinner?.votes ?? 0);
-                                                const leaderShare = Number(topWinner?.voteSharePercent ?? 0);
-
-                                                const votes = Number(r.votes ?? 0);
-                                                const share = Number(r.voteSharePercent ?? 0);
-
-                                                const dVotes = leaderVotes - votes; // 0 for winner
-                                                const dPts = leaderShare - share;
-
-                                                const trend = getTrendSeries(r);
-                                                const hasTrend = trend.length >= 2;
-
-                                                return (
-                                                    <tr
-                                                        key={r.candidateId}
-                                                        className={r.winner ? "bg-emerald-500/5" : "hover:bg-white/5"}
-                                                    >
-                                                        <td className="py-3 px-4">
-                                <span
-                                    className={[
-                                        "inline-flex items-center rounded-full px-2 py-1 text-xs font-semibold border",
-                                        r.winner
-                                            ? "bg-emerald-500/10 text-emerald-200 border-emerald-500/20"
-                                            : "bg-white/5 text-white/70 border-white/10",
-                                    ].join(" ")}
-                                >
-                                  #{r.rank}
-                                </span>
-                                                        </td>
-
-                                                        <td className="py-3 pr-4">
-                                                            <div className="font-semibold text-white/90">{r.fullName}</div>
-                                                            {r.winner && margin ? (
-                                                                <div className="mt-1 text-[11px] text-emerald-200/80">
-                                                                    Leads by +{Number(margin.marginVotes).toLocaleString()} votes • +{Number(margin.marginPts).toFixed(2)} pts
-                                                                </div>
-                                                            ) : null}
-                                                        </td>
-
-                                                        <td className="py-3 pr-4 font-mono text-xs text-white/70">
-                                                            {r.ballotSerial || "—"}
-                                                        </td>
-
-                                                        <td className="py-3 pr-4 text-white/80">{votes.toLocaleString()}</td>
-
-                                                        <td className="py-3 pr-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="h-2 w-32 rounded-full bg-white/10 overflow-hidden">
-                                                                    <div
-                                                                        className="h-full bg-indigo-400/60"
-                                                                        style={{
-                                                                            width: `${clamp(Number(r.voteSharePercent || 0), 0, 100)}%`,
-                                                                        }}
-                                                                    />
-                                                                </div>
-                                                                <div className="text-xs text-white/70">{pct(share)}</div>
-                                                            </div>
-                                                        </td>
-
-                                                        <td className="py-3 pr-4">
-                                <span className="font-mono text-xs text-white/70">
-                                  {r.winner ? "—" : `-${dVotes.toLocaleString()}`}
-                                </span>
-                                                        </td>
-
-                                                        <td className="py-3 pr-4">
-                                <span className="font-mono text-xs text-white/70">
-                                  {r.winner ? "—" : `-${dPts.toFixed(2)}`}
-                                </span>
-                                                        </td>
-
-                                                        <td className="py-3 pr-4">
-                                                            {hasTrend ? (
-                                                                <Sparkline values={trend} winner={!!r.winner} title="Candidate trend" />
-                                                            ) : (
-                                                                <span className="text-xs text-white/35">—</span>
-                                                            )}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-
-                                            {rows.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={8} className="py-10 text-center text-white/60">
-                                                        No results for this position.
-                                                    </td>
-                                                </tr>
-                                            ) : null}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                <div className="mt-6 text-center text-xs text-white/35">
-                                    Results are derived from VoteSelectionModel tallies and secured by the stored Merkle root.
-                                </div>
-                            </div>
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function Kpi({ title, value }) {
-    return (
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/30 p-4">
-            <div className="text-xs text-white/50">{title}</div>
-            <div className="mt-2 text-2xl font-extrabold tracking-tight text-white/90">{value}</div>
-        </div>
-    );
-}
-
-function Info({ title, value, mono }) {
-    return (
-        <div className="rounded-2xl border border-white/10 bg-zinc-900/30 p-4">
-            <div className="text-xs text-white/50">{title}</div>
-            <div className={["mt-2 text-sm text-white/85 leading-6", mono ? "font-mono text-xs break-all" : ""].join(" ")}>
-                {value}
-            </div>
-        </div>
-    );
-}
-
-function LegendDot({ label, value, dotClassName }) {
-    return (
-        <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-            <div className="flex items-center gap-2">
-                <span className={["h-2.5 w-2.5 rounded-full", dotClassName].join(" ")} />
-                <span className="text-white/70">{label}</span>
-            </div>
-            <span className="font-mono text-white/60">{value}</span>
-        </div>
-    );
-}
-
-/**
- * Simple SVG donut chart (no deps).
- * segments: [{ value, className }]
- */
-function DonutChart({ size = 160, thickness = 14, segments, centerTop, centerBottom }) {
-    const total = segments.reduce((a, s) => a + (Number(s.value) || 0), 0);
-    const r = (size - thickness) / 2;
-    const c = size / 2;
-    const circumference = 2 * Math.PI * r;
-
-    let acc = 0;
-    const strokes = segments.map((s, idx) => {
-        const v = Number(s.value) || 0;
-        const frac = total > 0 ? v / total : 0;
-        const dash = frac * circumference;
-        const gap = circumference - dash;
-        const offset = -(acc * circumference);
-        acc += frac;
-
-        return (
-            <circle
-                key={idx}
-                cx={c}
-                cy={c}
-                r={r}
-                fill="transparent"
-                strokeWidth={thickness}
-                strokeLinecap="round"
-                className={s.className}
-                strokeDasharray={`${dash} ${gap}`}
-                strokeDashoffset={offset}
-                style={{ transition: "stroke-dasharray 600ms ease, stroke-dashoffset 600ms ease" }}
-            />
-        );
-    });
-
-    return (
-        <div className="relative">
-            <svg width={size} height={size} className="block">
-                <circle cx={c} cy={c} r={r} fill="transparent" strokeWidth={thickness} className="stroke-white/10" />
-                <g transform={`rotate(-90 ${c} ${c})`}>{strokes}</g>
-            </svg>
-
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-lg font-extrabold text-white/90">{centerTop}</div>
-                <div className="text-[11px] uppercase tracking-wide text-white/45">{centerBottom}</div>
-            </div>
-        </div>
-    );
-}
-
-/**
- * Sparkline: tiny inline SVG line chart
- * - uses winner color (emerald) or indigo to keep the theme.
- */
-function Sparkline({ values, winner, title }) {
-    const w = 86;
-    const h = 20;
-    const pad = 2;
-
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = max - min || 1;
-
-    const pts = values.map((v, i) => {
-        const x = pad + (i * (w - pad * 2)) / Math.max(1, values.length - 1);
-        const y = h - pad - ((v - min) * (h - pad * 2)) / span;
-        return `${x.toFixed(2)},${y.toFixed(2)}`;
-    });
-
-    return (
-        <svg
-            width={w}
-            height={h}
-            viewBox={`0 0 ${w} ${h}`}
-            className="rounded-md border border-white/10 bg-zinc-900/30"
-            role="img"
-            aria-label={title || "sparkline"}
-            title={title}
-        >
-            <line x1="0" y1={h - 1} x2={w} y2={h - 1} className="stroke-white/10" />
-            <polyline
-                fill="none"
-                points={pts.join(" ")}
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={winner ? "stroke-emerald-400/70" : "stroke-indigo-400/70"}
-            />
-        </svg>
+                                ))}
+                            </Panel>
+                        </div>
+                    </div>
+                </>
+            )}
+        </AdminLayout>
     );
 }

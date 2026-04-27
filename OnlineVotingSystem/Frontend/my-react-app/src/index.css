@@ -1,3 +1,265 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');
+@import './styles/tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ----------------------------------------------------------------------------
+ * THEME SYSTEM
+ *
+ *   Default (no class)  → DARK theme  — soft charcoal, muted accents.
+ *   html.light          → LIGHT theme — warm ivory, paper-like.
+ *
+ * Design intent: "calm / eye-soothing" — less pure-black, less electric
+ * purple/pink, slightly off-white text, paper-warm light mode.
+ * --------------------------------------------------------------------------*/
+
+:root {
+    /* -------------------- DARK (default) -------------------- */
+    /* Backgrounds — warmer charcoal instead of pure blue-black */
+    --bg:        #121418;
+    --surface:   #191c22;
+    --surface-2: #20242d;
+    --surface-3: #272c37;
+
+    /* Borders — slightly softer so lines are visible but not harsh */
+    --border:   rgba(255,255,255,0.055);
+    --border-h: rgba(255,255,255,0.11);
+    --hairline:   rgba(255,255,255,0.055);
+    --hairline-h: rgba(255,255,255,0.11);
+
+    /* Text — off-white instead of pure white (easier on eyes in low light) */
+    --t1: #e3e5eb;
+    --t2: #9196a6;
+    --t3: #5a5f72;
+    --ink:   #e3e5eb;
+    --ink-2: #9196a6;
+    --ink-3: #5a5f72;
+
+    /* Accents — muted / dusty tones, not electric */
+    --purple:   #8b82ef;
+    --purple-d: rgba(139,130,239,0.14);
+    --purple-b: rgba(139,130,239,0.28);
+    --pink:     #eb94c8;
+    --pink-d:   rgba(235,148,200,0.14);
+    --cyan:     #6bd9e3;
+    --cyan-d:   rgba(107,217,227,0.14);
+    --green:    #5bcf92;
+    --green-d:  rgba(91,207,146,0.14);
+    --green-b:  rgba(91,207,146,0.26);
+    --orange:   #f1ad5c;
+    --orange-d: rgba(241,173,92,0.14);
+    --red:      #ef8585;
+    --red-d:    rgba(239,133,133,0.14);
+
+    /* Warm-trust aliases */
+    --coral:   #eb94c8;
+    --coral-d: #d27fb6;
+    --navy:    #2e3850;
+    --navy-d:  #222a3e;
+
+    /* Semantic */
+    --ok:   #5bcf92;
+    --warn: #f1ad5c;
+    --err:  #ef8585;
+    --info: #6bd9e3;
+
+    /* Gradients — softened saturation so buttons feel calm, not hot */
+    --grad-primary: linear-gradient(135deg, #8b82ef 0%, #d989bc 100%);
+    --grad-soft:    linear-gradient(135deg, rgba(139,130,239,0.14) 0%, rgba(235,148,200,0.08) 100%);
+    --grad-navy:    linear-gradient(135deg, #272c37 0%, #191c22 100%);
+
+    color-scheme: dark;
+}
+
+html.light {
+    /* -------------------- LIGHT (warm paper) -------------------- */
+    --bg:        #FBF8F3;   /* ivory */
+    --surface:   #FFFFFF;
+    --surface-2: #F5EFE7;
+    --surface-3: #EDE5D8;
+
+    --border:   rgba(43,60,95,0.07);
+    --border-h: rgba(43,60,95,0.14);
+    --hairline:   rgba(43,60,95,0.07);
+    --hairline-h: rgba(43,60,95,0.14);
+
+    /* Text — soft near-black instead of pure #000 */
+    --t1: #22273a;
+    --t2: #5c6479;
+    --t3: #939aab;
+    --ink:   #22273a;
+    --ink-2: #5c6479;
+    --ink-3: #939aab;
+
+    /* Accents — warm coral + peach, same muted sensibility as dark */
+    --purple:   #7a6fd9;
+    --purple-d: rgba(122,111,217,0.10);
+    --purple-b: rgba(122,111,217,0.24);
+    --pink:     #E0708A;
+    --pink-d:   rgba(224,112,138,0.10);
+    --cyan:     #4AA5AD;
+    --cyan-d:   rgba(74,165,173,0.10);
+    --green:    #43A380;
+    --green-d:  rgba(67,163,128,0.10);
+    --green-b:  rgba(67,163,128,0.22);
+    --orange:   #EE8360;
+    --orange-d: rgba(238,131,96,0.10);
+    --red:      #CA5F5F;
+    --red-d:    rgba(202,95,95,0.10);
+
+    --coral:   #E0708A;
+    --coral-d: #C85C75;
+    --navy:    #2B3C5F;
+    --navy-d:  #1A2A4A;
+
+    --ok:   #43A380;
+    --warn: #C48833;
+    --err:  #CA5F5F;
+    --info: #4180A0;
+
+    --grad-primary: linear-gradient(135deg, #E0708A 0%, #EE9A7A 100%);
+    --grad-soft:    linear-gradient(135deg, rgba(224,112,138,0.08) 0%, rgba(238,154,122,0.05) 100%);
+    --grad-navy:    linear-gradient(135deg, #2B3C5F 0%, #1A2A4A 100%);
+
+    color-scheme: light;
+}
+
+/* ----------------------------------------------------------------------------
+ * TYPOGRAPHY & BASE
+ * --------------------------------------------------------------------------*/
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+    background: var(--bg);
+    color: var(--t1);
+    font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-size: 13.5px;
+    line-height: 1.55;
+    letter-spacing: -0.002em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv11", "ss01", "ss03";    /* softer Inter glyphs */
+    text-rendering: optimizeLegibility;
+    transition: background-color .28s ease, color .28s ease;
+}
+
+h1, h2, h3, .display {
+    letter-spacing: -0.012em;
+    line-height: 1.25;
+}
+
+p, li, label { line-height: 1.6; }
+
+.mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-feature-settings: "zero";
+}
+
+/* Scrollbars — thin, blend in */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-h); }
+
+/* ----------------------------------------------------------------------------
+ * ANIMATIONS
+ * --------------------------------------------------------------------------*/
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.animate-up   { animation: fadeUp .32s cubic-bezier(.2,.7,.2,1) both; }
+.animate-up-2 { animation: fadeUp .32s .08s cubic-bezier(.2,.7,.2,1) both; }
+.animate-up-3 { animation: fadeUp .32s .14s cubic-bezier(.2,.7,.2,1) both; }
+.animate-up-4 { animation: fadeUp .32s .20s cubic-bezier(.2,.7,.2,1) both; }
+
+/* ----------------------------------------------------------------------------
+ * BUTTON POLISH — extend tokens.css, not replace
+ * --------------------------------------------------------------------------*/
+.btn {
+    min-height: 40px;
+    padding: 0.6rem 1.1rem;
+    font-weight: 600;
+    letter-spacing: 0.002em;
+    border-radius: 10px;
+    transition: transform .14s ease, background .14s ease, color .14s ease,
+                box-shadow .2s ease, filter .14s ease, border-color .14s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.btn:focus-visible {
+    outline: 2px solid var(--purple);
+    outline-offset: 2px;
+}
+.btn:active { transform: translateY(1px); }
+.btn-lg {
+    min-height: 46px;
+    padding: 0.8rem 1.4rem;
+    font-size: 0.94rem;
+    border-radius: 12px;
+}
+.btn-primary {
+    background: var(--grad-primary);
+    color: #fff;
+    border-color: transparent;
+    box-shadow: 0 4px 14px -6px rgba(139,130,239,0.40);
+}
+.btn-primary:hover {
+    filter: brightness(1.05);
+    box-shadow: 0 6px 18px -6px rgba(139,130,239,0.52);
+    transform: translateY(-1px);
+}
+html.light .btn-primary {
+    box-shadow: 0 4px 14px -6px rgba(224,112,138,0.35);
+}
+html.light .btn-primary:hover {
+    box-shadow: 0 6px 18px -6px rgba(224,112,138,0.48);
+}
+.btn-ghost {
+    background: var(--surface);
+    color: var(--t1);
+    border: 1px solid var(--border);
+}
+.btn-ghost:hover {
+    background: var(--surface-2);
+    border-color: var(--border-h);
+}
+
+/* Consistent input height — matches .btn-lg so adjacent buttons line up */
+.input-field,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+input[type="tel"],
+input[type="number"] {
+    min-height: 40px;
+}
+
+/* ----------------------------------------------------------------------------
+ * CARD + PILL refinement — slightly softer shadows/radii
+ * --------------------------------------------------------------------------*/
+.card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+.card-hover {
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.card-hover:hover {
+    transform: translateY(-1px);
+    border-color: var(--border-h);
+    box-shadow: 0 6px 18px -8px rgba(0,0,0,0.16);
+}
+.shadow-lift {
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05), 0 16px 36px -14px rgba(0,0,0,0.22);
+}
+html.light .shadow-lift {
+    box-shadow: 0 2px 8px rgba(43,60,95,0.05), 0 16px 36px -14px rgba(43,60,95,0.14);
+}
+
+/* A bit more breathing room in body text in both themes */
+html.light .card { background: var(--surface); border-color: var(--border); }
