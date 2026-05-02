@@ -1,0 +1,18 @@
+apiVersion: 1
+
+# Grafana provisioning entry — picks up every JSON dashboard dropped into
+# /etc/grafana/provisioning/dashboards/ovs/ on container start and (because
+# updateIntervalSeconds is set) refreshes them every 30s without a restart.
+providers:
+  - name: "OVS"
+    orgId: 1
+    folder: "OVS"
+    folderUid: ovs-folder
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/ovs
+      foldersFromFilesStructure: false
