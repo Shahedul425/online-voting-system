@@ -1,0 +1,57 @@
+// ───────────────────────────────────────────────────────────────────────────
+// Alloy collector config for the OVS stack.
+//
+// What this does, in one breath:
+//   1. Watches the Docker daemon for running containers (discovery.docker).
+//   2. Tails stdout/stderr of every container as a log stream
+//      (loki.source.docker).
+//   3. Adds friendly Loki labels — service_name, container, image — so we
+//      can query e.g. {service_name="demo"} or {container="trustvote-backend"}
+//      in Grafana → Explore → Loki.
+//   4. Forwards everything to the Loki container at http://loki:3100.
+//
+// Requires the docker socket to be mounted into the alloy container —
+// docker-compose.prod.yml already does this with
+//   /var/run/docker.sock:/var/run/docker.sock:ro
+// ───────────────────────────────────────────────────────────────────────────
+
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Map raw docker labels into clean Loki labels.
+// `__meta_docker_container_name` is something like "/trustvote-backend";
+// we strip the leading slash and use it as both `container` and
+// `service_name` so existing dashboard queries that filter on
+// `service_name` keep working.
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "service_name"
+  }
+  rule {
+    source_labels = ["__meta_docker_image"]
+    target_label  = "image"
+  }
+}
+
+loki.source.docker "logs" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.relabel.containers.output
+  forward_to    = [loki.write.default.receiver]
+  refresh_interval = "5s"
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
