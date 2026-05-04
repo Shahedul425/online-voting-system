@@ -7,6 +7,36 @@
 @tailwind utilities;
 
 /* ----------------------------------------------------------------------------
+ * iOS Safari focus-zoom fix.
+ *   Mobile Safari auto-zooms the viewport whenever a user focuses an input/
+ *   textarea/select whose computed font-size is less than 16px — and once
+ *   it has zoomed there is no smooth way to zoom back out. The fix is to
+ *   force a 16px minimum on every form control on touch viewports. This is
+ *   the standard cross-browser solution and is preferred over disabling
+ *   user-scalable in the viewport meta (which would also kill accessibility
+ *   pinch-zoom for users who actually need it).
+ * --------------------------------------------------------------------------*/
+@media (max-width: 768px) {
+    input,
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="search"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="number"],
+    input[type="date"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="time"],
+    input[type="week"],
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
+}
+
+/* ----------------------------------------------------------------------------
  * THEME SYSTEM
  *
  *   Default (no class)  → DARK theme  — soft charcoal, muted accents.

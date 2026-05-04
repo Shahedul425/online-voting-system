@@ -2,23 +2,19 @@
  * SuperHealth — Observability hub.
  *
  *   Grafana is the "front door"; Prometheus / Loki / Tempo / Alloy are the raw
- *   data sources behind it. In addition to clickable cards that open each tool
- *   in a new tab, this page now ALSO embeds Grafana directly so the operator
- *   never has to leave the SuperAdmin dashboard.
+ *   data sources behind it. This page surfaces a clickable card for each tool
+ *   so the operator can hop straight into Grafana (and from there set up
+ *   datasources / dashboards / PromQL manually).
  *
  *   URL strategy
  *   ------------
  *   - VITE_*_URL env override wins if explicitly set at build time.
- *   - In dev (vite dev server, import.meta.env.DEV), defaults are localhost
+ *   - In dev (vite dev server, import.meta.env.DEV) defaults are localhost
  *     pointing at the docker-compose stack's host ports.
- *   - In prod the defaults are SAME-ORIGIN relative paths (/grafana/,
- *     /prometheus/, /loki/, /tempo/, /alloy/) which the frontend nginx
- *     reverse-proxies to the actual containers via the internal
- *     `trustvote_net` Docker network — so the browser never sees a raw
- *     `localhost:*` URL in production, only first-party paths.
- *
- *   Forensic-trace widget at the bottom builds a LogQL-prefiltered Grafana
- *   Explore URL for a given request ID.
+ *   - In prod the defaults are the public trustvote.live subdomains, the
+ *     same way Keycloak lives at https://auth.trustvote.live/auth — so the
+ *     "Open Grafana" button takes the operator to the real Grafana login,
+ *     never to localhost.
  */
 import { useState } from "react";
 import AppShell, { Topbar, Scaffold } from "../../ui/AppShell";
@@ -29,21 +25,17 @@ const isDev = import.meta.env.DEV;
 const pick = (envValue, devDefault, prodDefault) =>
   (envValue && envValue.trim()) || (isDev ? devDefault : prodDefault);
 
-// Dev: direct host ports of the docker-compose stack.
-// Prod: same-origin reverse-proxied paths (the frontend nginx forwards
-// /grafana/, /prometheus/, /loki/, /tempo/, /alloy/ to the docker
-// service hostnames — i.e. the internal trustvote_net network — so the
-// browser only ever sees first-party URLs, never `localhost:*`).
-const GRAFANA_URL    = pick(import.meta.env.VITE_GRAFANA_URL,    "http://localhost:3000",  "/grafana");
-const PROMETHEUS_URL = pick(import.meta.env.VITE_PROMETHEUS_URL, "http://localhost:9090",  "/prometheus");
-const LOKI_URL       = pick(import.meta.env.VITE_LOKI_URL,       "http://localhost:3100",  "/loki");
-const TEMPO_URL      = pick(import.meta.env.VITE_TEMPO_URL,      "http://localhost:3200",  "/tempo");
-const ALLOY_URL      = pick(import.meta.env.VITE_ALLOY_URL,      "http://localhost:12345", "/alloy");
-const DEFAULT_DASH   = (import.meta.env.VITE_GRAFANA_DEFAULT_DASH || "ovs-system").trim();
+// Dev: docker-compose host ports.  Prod: public trustvote.live subdomains.
+// Override any of these via VITE_*_URL at build time if your topology differs.
+const GRAFANA_URL    = pick(import.meta.env.VITE_GRAFANA_URL,    "http://localhost:3000",  "https://grafana.trustvote.live");
+const PROMETHEUS_URL = pick(import.meta.env.VITE_PROMETHEUS_URL, "http://localhost:9090",  "https://grafana.trustvote.live");
+const LOKI_URL       = pick(import.meta.env.VITE_LOKI_URL,       "http://localhost:3100",  "https://grafana.trustvote.live");
+const TEMPO_URL      = pick(import.meta.env.VITE_TEMPO_URL,      "http://localhost:3200",  "https://grafana.trustvote.live");
+const ALLOY_URL      = pick(import.meta.env.VITE_ALLOY_URL,      "http://localhost:12345", "https://grafana.trustvote.live");
+const DEFAULT_DASH   = (import.meta.env.VITE_GRAFANA_DEFAULT_DASH || "").trim();
 
 // Same-origin relative paths can be embedded; absolute cross-origin URLs
-// usually can't due to X-Frame-Options. We treat any URL starting with "/"
-// as same-origin and therefore embeddable.
+// usually can't due to X-Frame-Options.
 const isEmbeddable = (url) => url.startsWith("/") || url.startsWith(window.location.origin);
 
 const DATA_SOURCES = [
@@ -85,45 +77,20 @@ const DATA_SOURCES = [
   },
 ];
 
-// Quick-jump shortcuts inside Grafana — built relative to GRAFANA_URL so they
-// also work as same-origin paths under /grafana/.
+// Quick-jump shortcuts inside Grafana — built relative to GRAFANA_URL.
 const grafanaPath = (p) => `${GRAFANA_URL.replace(/\/$/, "")}${p}`;
-
-// Open a specific panel inside the OVS dashboard at full-width via Grafana's
-// `viewPanel` query param. Each card jumps straight to the right pane.
-const dashPanel = (panelId, opts = {}) => {
-  const kiosk = opts.kiosk ? `&kiosk=tv` : "";
-  const theme = `&theme=${opts.theme || "dark"}`;
-  return grafanaPath(`/d/${DEFAULT_DASH}/ovs-system-dashboard?viewPanel=${panelId}${kiosk}${theme}`);
-};
-
 const QUICK_JUMPS = [
-  { key: "dashboard", label: "Full dashboard", icon: "layout-grid", path: `/d/${DEFAULT_DASH}/ovs-system-dashboard?theme=dark`, tint: "var(--cyan)"   },
-  { key: "explore",   label: "Explore",        icon: "compass",     path: "/explore",                                            tint: "var(--purple)" },
-  { key: "alerting",  label: "Alerts",         icon: "bell",        path: "/alerting/list",                                      tint: "var(--orange)" },
-  { key: "logs",      label: "Logs (Loki)",    icon: "file-text",   path: "/explore?left=" + encodeURIComponent('{"datasource":"loki"}'),  tint: "var(--green)"  },
-  { key: "traces",    label: "Traces (Tempo)", icon: "git-branch",  path: "/explore?left=" + encodeURIComponent('{"datasource":"tempo"}'), tint: "var(--purple)" },
-];
-
-// Direct deep links to specific dashboard panels — mirrors what shows on the
-// SuperAdmin "Observability" landing card so an operator can drill into a
-// single chart without scanning the full board.
-const PANEL_DEEPLINKS = [
-  { id: 1,  label: "System Status",       icon: "activity",      tint: "var(--green)"  },
-  { id: 4,  label: "CPU %",               icon: "cpu",           tint: "var(--cyan)"   },
-  { id: 3,  label: "Heap Used %",         icon: "memory-stick",  tint: "var(--purple)" },
-  { id: 5,  label: "Server Errors (5xx)", icon: "alert-octagon", tint: "var(--red)"    },
-  { id: 7,  label: "Client Errors (4xx)", icon: "alert-circle",  tint: "var(--orange)" },
-  { id: 8,  label: "Requests / Second",   icon: "zap",           tint: "var(--cyan)"   },
-  { id: 10, label: "Latency p95 / p99",   icon: "timer",         tint: "var(--purple)" },
-  { id: 11, label: "Application Logs",    icon: "file-text",     tint: "var(--green)"  },
+  { key: "explore",    label: "Explore",     icon: "compass",     path: "/explore",       tint: "var(--purple)" },
+  { key: "dashboards", label: "Dashboards",  icon: "layout-grid", path: "/dashboards",    tint: "var(--cyan)"   },
+  { key: "alerting",   label: "Alerts",      icon: "bell",        path: "/alerting/list", tint: "var(--orange)" },
+  { key: "logs",       label: "Logs (Loki)", icon: "file-text",   path: "/explore?left=" + encodeURIComponent('{"datasource":"loki"}'),  tint: "var(--green)"  },
+  { key: "traces",     label: "Traces",      icon: "git-branch",  path: "/explore?left=" + encodeURIComponent('{"datasource":"tempo"}'), tint: "var(--purple)" },
 ];
 
 export default function SuperHealth() {
   const [embedOpen, setEmbedOpen] = useState(true);
-  const [embedTab, setEmbedTab]   = useState("grafana"); // grafana | prometheus | loki | tempo | alloy
+  const [embedTab, setEmbedTab]   = useState("grafana");
 
-  // What URL is currently embedded?
   const TAB_TO_URL = {
     grafana: DEFAULT_DASH ? grafanaPath(`/d/${DEFAULT_DASH}?kiosk=tv&theme=dark`) : grafanaPath("/?kiosk=tv&theme=dark"),
     prometheus: PROMETHEUS_URL,
@@ -179,25 +146,24 @@ export default function SuperHealth() {
                 className="display text-lg sm:text-xl font-semibold mb-1"
                 style={{ color: "var(--t1)" }}
               >
-                Service health, embedded in the dashboard
+                Service health lives in Grafana
               </div>
               <p
                 className="text-xs sm:text-sm max-w-2xl"
                 style={{ color: "var(--t2)" }}
               >
                 Uptime, p95, error rate, RPS, logs, traces, alerts — all wired
-                into Grafana below. Switch tabs to peek at the raw data
-                sources, or pop any of them out into a new tab.
+                into Grafana. Individual data sources are linked below in case
+                you need to poke at raw metrics or run an ad-hoc LogQL query.
               </p>
             </div>
           </div>
 
-          {/* Embedded viewer ─────────────────────────────────────────────── */}
+          {/* Embedded viewer */}
           <div
             className="card overflow-hidden mb-4 sm:mb-5"
             style={{ border: "1px solid var(--border)" }}
           >
-            {/* Tab strip */}
             <div
               className="flex items-center gap-1 px-2 sm:px-3 py-2 overflow-x-auto"
               style={{
@@ -252,7 +218,6 @@ export default function SuperHealth() {
               </div>
             </div>
 
-            {/* Iframe / fallback */}
             {embedOpen && (
               <div
                 className="relative w-full"
@@ -263,7 +228,7 @@ export default function SuperHealth() {
               >
                 {canEmbed ? (
                   <iframe
-                    key={embedSrc /* force reload when switching */}
+                    key={embedSrc}
                     src={embedSrc}
                     title={`${embedTab} viewer`}
                     className="w-full h-full"
@@ -308,46 +273,7 @@ export default function SuperHealth() {
             )}
           </div>
 
-          {/* OVS panel deep links */}
-          <div
-            className="text-[11px] font-semibold uppercase tracking-wider mb-2 px-1"
-            style={{ color: "var(--t3)" }}
-          >
-            OVS dashboards
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-5">
-            {PANEL_DEEPLINKS.map((p) => (
-              <a
-                key={p.id}
-                href={dashPanel(p.id)}
-                target="_blank"
-                rel="noreferrer"
-                className="card card-hover p-3 flex items-center gap-2.5"
-                title={`Open "${p.label}" in Grafana`}
-              >
-                <div
-                  className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                  style={{ background: "var(--surface-2)", color: p.tint }}
-                >
-                  <Icon name={p.icon} className="w-4 h-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div
-                    className="font-semibold text-xs sm:text-sm truncate"
-                    style={{ color: "var(--t1)" }}
-                  >
-                    {p.label}
-                  </div>
-                  <div className="text-[10px] mono truncate" style={{ color: "var(--t3)" }}>
-                    panel #{p.id}
-                  </div>
-                </div>
-                <Icon name="arrow-up-right" className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--t3)" }} />
-              </a>
-            ))}
-          </div>
-
-          {/* Generic Grafana quick jumps */}
+          {/* Grafana quick jumps */}
           <div
             className="text-[11px] font-semibold uppercase tracking-wider mb-2 px-1"
             style={{ color: "var(--t3)" }}
@@ -377,7 +303,7 @@ export default function SuperHealth() {
                     {q.label}
                   </div>
                   <div className="text-[10px] mono truncate" style={{ color: "var(--t3)" }}>
-                    {q.path.length > 32 ? q.path.slice(0, 32) + "…" : q.path}
+                    {q.path}
                   </div>
                 </div>
                 <Icon name="arrow-right" className="w-3.5 h-3.5 shrink-0" style={{ color: "var(--t3)" }} />
@@ -474,9 +400,9 @@ export default function SuperHealth() {
             <span className="mono">VITE_LOKI_URL</span>,{" "}
             <span className="mono">VITE_TEMPO_URL</span>, and{" "}
             <span className="mono">VITE_ALLOY_URL</span>. Defaults: docker-compose
-            ports in dev, same-origin <span className="mono">/grafana/</span> etc.
-            in prod (proxied by the frontend nginx into the internal{" "}
-            <span className="mono">trustvote_net</span> Docker network).
+            host ports in dev, <span className="mono">https://grafana.trustvote.live</span>{" "}
+            in prod (mirroring the <span className="mono">https://auth.trustvote.live/auth</span>{" "}
+            pattern used for Keycloak).
           </div>
         </div>
       </Scaffold>
