@@ -165,6 +165,15 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
       OTEL_METRICS_EXPORTER: none
       OTEL_LOGS_EXPORTER: none
+      # Loki direct-push appender lives in logback-spring.xml. Without this
+      # env var the appender falls back to localhost which is unreachable
+      # from inside the backend container — and Grafana then sees no
+      # `{app="demo"}` log stream. Pointing it at the docker service host
+      # makes the JSON log path work end-to-end.
+      LOKI_URL: http://loki:3100/loki/api/v1/push
+      # Application name that becomes both the Logback APP_NAME and the
+      # Loki label `app=…`. Keep this stable so dashboards don't break.
+      SPRING_APPLICATION_NAME: demo
     depends_on:
       app_db:
         condition: service_healthy
