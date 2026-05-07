@@ -35,6 +35,29 @@ jobs:
           distribution: corretto
           java-version: 21
 
+      # ────────────────────────────────────────────────────────────────────
+      # Guard against a Spring Boot 2.4+ landmine: setting
+      # `spring.profiles.active=...` inside a profile-specific properties
+      # file (application-prod.properties, application-dev.properties, …)
+      # is illegal and crashes the JVM at startup with
+      # InvalidConfigDataPropertyException — but the failure only surfaces
+      # in production, never in tests. Fail the build here so a bad commit
+      # can never reach `:latest` again.
+      # ────────────────────────────────────────────────────────────────────
+      - name: Guard — no spring.profiles.active in profile-specific files
+        run: |
+          set -e
+          BAD=$(grep -lE "^[[:space:]]*spring\.profiles\.active[[:space:]]*=" \
+                OnlineVotingSystem/Backend/demo/src/main/resources/application-*.properties \
+                2>/dev/null || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::Forbidden 'spring.profiles.active' found in profile-specific file(s):"
+            echo "$BAD"
+            echo "Move the property to application.properties or set it via env var SPRING_PROFILES_ACTIVE."
+            exit 1
+          fi
+          echo "OK: no profile-specific file declares spring.profiles.active"
+
       - name: Build and run unit tests with coverage
         run: mvn -B clean verify -DskipITs --file OnlineVotingSystem/Backend/demo/pom.xml
         continue-on-error: true
